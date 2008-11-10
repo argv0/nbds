@@ -1,0 +1,335 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.7	//
+ASSERT_EQUAL	struct/ht_test.c	/^#define ASSERT_EQUAL(/;"	d	file:
+CACHE_LINE_SIZE	include/common.h	/^#define CACHE_LINE_SIZE /;"	d
+CAT	include/common.h	/^#define CAT(/;"	d
+CFLAGS	makefile	/^CFLAGS := -g -Wall -Werror -std=c99 -m64 -fnested-functions -fwhole-program -combine -03 -DENABLE_TRACE$/;"	m
+CLEAR_MARK	struct/list.c	/^#define CLEAR_MARK(/;"	d	file:
+COPIED_VALUE	struct/ht.c	/^#define COPIED_VALUE /;"	d	file:
+CU_ALLOC	include/CuTest.h	/^#define CU_ALLOC(/;"	d
+CU_TEST_H	include/CuTest.h	/^#define CU_TEST_H$/;"	d
+CuAssert	include/CuTest.h	/^#define CuAssert(/;"	d
+CuAssertDblEquals	include/CuTest.h	/^#define CuAssertDblEquals(/;"	d
+CuAssertDblEquals_LineMsg	util/CuTest.c	/^void CuAssertDblEquals_LineMsg(CuTest* tc, const char* file, int line, const char* message, $/;"	f
+CuAssertDblEquals_Msg	include/CuTest.h	/^#define CuAssertDblEquals_Msg(/;"	d
+CuAssertIntEquals	include/CuTest.h	/^#define CuAssertIntEquals(/;"	d
+CuAssertIntEquals_LineMsg	util/CuTest.c	/^void CuAssertIntEquals_LineMsg(CuTest* tc, const char* file, int line, const char* message, $/;"	f
+CuAssertIntEquals_Msg	include/CuTest.h	/^#define CuAssertIntEquals_Msg(/;"	d
+CuAssertPtrEquals	include/CuTest.h	/^#define CuAssertPtrEquals(/;"	d
+CuAssertPtrEquals_LineMsg	util/CuTest.c	/^void CuAssertPtrEquals_LineMsg(CuTest* tc, const char* file, int line, const char* message, $/;"	f
+CuAssertPtrEquals_Msg	include/CuTest.h	/^#define CuAssertPtrEquals_Msg(/;"	d
+CuAssertPtrNotNull	include/CuTest.h	/^#define CuAssertPtrNotNull(/;"	d
+CuAssertPtrNotNullMsg	include/CuTest.h	/^#define CuAssertPtrNotNullMsg(/;"	d
+CuAssertStrEquals	include/CuTest.h	/^#define CuAssertStrEquals(/;"	d
+CuAssertStrEquals_LineMsg	util/CuTest.c	/^void CuAssertStrEquals_LineMsg(CuTest* tc, const char* file, int line, const char* message, $/;"	f
+CuAssertStrEquals_Msg	include/CuTest.h	/^#define CuAssertStrEquals_Msg(/;"	d
+CuAssertTrue	include/CuTest.h	/^#define CuAssertTrue(/;"	d
+CuAssert_Line	util/CuTest.c	/^void CuAssert_Line(CuTest* tc, const char* file, int line, const char* message, int condition)$/;"	f
+CuFail	include/CuTest.h	/^#define CuFail(/;"	d
+CuFailInternal	util/CuTest.c	/^static void CuFailInternal(CuTest* tc, const char* file, int line, CuString* string)$/;"	f	file:
+CuFail_Line	util/CuTest.c	/^void CuFail_Line(CuTest* tc, const char* file, int line, const char* message2, const char* message)$/;"	f
+CuStrAlloc	util/CuTest.c	/^char* CuStrAlloc(int size)$/;"	f
+CuStrCopy	util/CuTest.c	/^char* CuStrCopy(const char* old)$/;"	f
+CuString	include/CuTest.h	/^} CuString;$/;"	t	typeref:struct:__anon1
+CuStringAppend	util/CuTest.c	/^void CuStringAppend(CuString* str, const char* text)$/;"	f
+CuStringAppendChar	util/CuTest.c	/^void CuStringAppendChar(CuString* str, char ch)$/;"	f
+CuStringAppendFormat	util/CuTest.c	/^void CuStringAppendFormat(CuString* str, const char* format, ...)$/;"	f
+CuStringInit	util/CuTest.c	/^void CuStringInit(CuString* str)$/;"	f
+CuStringInsert	util/CuTest.c	/^void CuStringInsert(CuString* str, const char* text, int pos)$/;"	f
+CuStringNew	util/CuTest.c	/^CuString* CuStringNew(void)$/;"	f
+CuStringResize	util/CuTest.c	/^void CuStringResize(CuString* str, int newSize)$/;"	f
+CuSuite	include/CuTest.h	/^} CuSuite;$/;"	t	typeref:struct:__anon2
+CuSuiteAdd	util/CuTest.c	/^void CuSuiteAdd(CuSuite* testSuite, CuTest *testCase)$/;"	f
+CuSuiteAddSuite	util/CuTest.c	/^void CuSuiteAddSuite(CuSuite* testSuite, CuSuite* testSuite2)$/;"	f
+CuSuiteDetails	util/CuTest.c	/^void CuSuiteDetails(CuSuite* testSuite, CuString* details)$/;"	f
+CuSuiteInit	util/CuTest.c	/^void CuSuiteInit(CuSuite* testSuite)$/;"	f
+CuSuiteNew	util/CuTest.c	/^CuSuite* CuSuiteNew(void)$/;"	f
+CuSuiteRun	util/CuTest.c	/^void CuSuiteRun(CuSuite* testSuite)$/;"	f
+CuSuiteSummary	util/CuTest.c	/^void CuSuiteSummary(CuSuite* testSuite, CuString* summary)$/;"	f
+CuTest	include/CuTest.h	/^struct CuTest$/;"	s
+CuTest	include/CuTest.h	/^typedef struct CuTest CuTest;$/;"	t	typeref:struct:CuTest
+CuTestInit	util/CuTest.c	/^void CuTestInit(CuTest* t, const char* name, TestFunction function)$/;"	f
+CuTestNew	util/CuTest.c	/^CuTest* CuTestNew(const char* name, TestFunction function)$/;"	f
+CuTestRun	util/CuTest.c	/^void CuTestRun(CuTest* tc)$/;"	f
+DECLARE_THREAD_LOCAL	include/tls.h	/^#define DECLARE_THREAD_LOCAL(/;"	d
+DOES_NOT_EXIST	include/ht.h	/^#define DOES_NOT_EXIST /;"	d
+ENTRIES_PER_BUCKET	struct/ht.c	/^#define ENTRIES_PER_BUCKET /;"	d	file:
+ENTRIES_PER_COPY_CHUNK	struct/ht.c	/^#define ENTRIES_PER_COPY_CHUNK /;"	d	file:
+EXES	makefile	/^EXES   := $(TESTS)$/;"	m
+EXPECT_FALSE	include/common.h	/^#define EXPECT_FALSE(/;"	d
+EXPECT_TRUE	include/common.h	/^#define EXPECT_TRUE(/;"	d
+FALSE	include/common.h	/^#define FALSE /;"	d
+GET_SCALE	util/mem.c	/^#define GET_SCALE(/;"	d	file:
+GlobalVersion	txn/txn.c	/^uint64_t GlobalVersion = 1;$/;"	v
+HT_EXPECT_EXISTS	include/ht.h	/^#define HT_EXPECT_EXISTS /;"	d
+HT_EXPECT_NOT_EXISTS	include/ht.h	/^#define HT_EXPECT_NOT_EXISTS /;"	d
+HT_EXPECT_WHATEVER	include/ht.h	/^#define HT_EXPECT_WHATEVER /;"	d
+HUGE_STRING_LEN	include/CuTest.h	/^#define HUGE_STRING_LEN	/;"	d
+INCS	makefile	/^INCS   := $(addprefix -I, include)$/;"	m
+INITIAL_WRITES_SIZE	txn/txn.c	/^#define INITIAL_WRITES_SIZE /;"	d	file:
+INIT_THREAD_LOCAL	include/tls.h	/^#define INIT_THREAD_LOCAL /;"	d
+INIT_THREAD_LOCAL	include/tls.h	/^#define INIT_THREAD_LOCAL(/;"	d
+IS_MARKED	struct/list.c	/^#define IS_MARKED(/;"	d	file:
+IS_TAGGED	include/common.h	/^#define IS_TAGGED(/;"	d
+LOCALIZE	include/tls.h	/^#define LOCALIZE /;"	d
+LOCALIZE	include/tls.h	/^#define LOCALIZE(/;"	d
+LWT_BUFFER_MASK	include/lwt.h	/^#define LWT_BUFFER_MASK /;"	d
+LWT_BUFFER_SCALE	include/lwt.h	/^#define LWT_BUFFER_SCALE /;"	d
+LWT_BUFFER_SIZE	include/lwt.h	/^#define LWT_BUFFER_SIZE /;"	d
+LWT_H	include/lwt.h	/^#define LWT_H$/;"	d
+MASK	include/common.h	/^#define MASK(/;"	d
+MAX_BUCKETS_TO_PROBE	struct/ht.c	/^#define MAX_BUCKETS_TO_PROBE /;"	d	file:
+MAX_NUM_THREADS	struct/list.c	/^#define MAX_NUM_THREADS /;"	d	file:
+MAX_SCALE	util/mem.c	/^#define MAX_SCALE /;"	d	file:
+MAX_TEST_CASES	include/CuTest.h	/^#define MAX_TEST_CASES	/;"	d
+MEM_H	include/mem.h	/^#define MEM_H$/;"	d
+MIN_SCALE	struct/ht.c	/^#define MIN_SCALE /;"	d	file:
+MinActiveTxnVersion	txn/txn.c	/^uint64_t MinActiveTxnVersion = 0;$/;"	v
+NBD_H	include/nbd.h	/^#define NBD_H$/;"	d
+NBHT_H	include/ht.h	/^#define NBHT_H$/;"	d
+NUM_ITERATIONS	struct/list.c	/^#define NUM_ITERATIONS /;"	d	file:
+NUM_ITERATIONS	util/rcu.c	/^#define NUM_ITERATIONS /;"	d	file:
+NUM_THREADS	include/common.h	/^#define NUM_THREADS /;"	d
+ON_EXIT_SCOPE	include/common.h	/^#define ON_EXIT_SCOPE(/;"	d
+ON_EXIT_SCOPE_I	include/common.h	/^#define ON_EXIT_SCOPE_I(/;"	d
+PLACE_MARK	struct/list.c	/^#define PLACE_MARK(/;"	d	file:
+RCU_POST_THRESHOLD	util/rcu.c	/^#define RCU_POST_THRESHOLD /;"	d	file:
+RCU_QUEUE_SCALE	util/rcu.c	/^#define RCU_QUEUE_SCALE /;"	d	file:
+SET_THREAD_LOCAL	include/tls.h	/^#define SET_THREAD_LOCAL /;"	d
+SET_THREAD_LOCAL	include/tls.h	/^#define SET_THREAD_LOCAL(/;"	d
+STRING_INC	include/CuTest.h	/^#define STRING_INC	/;"	d
+STRING_MAX	include/CuTest.h	/^#define STRING_MAX	/;"	d
+STRIP_TAG	include/common.h	/^#define STRIP_TAG(/;"	d
+SUITE_ADD_TEST	include/CuTest.h	/^#define SUITE_ADD_TEST(/;"	d
+SUPERBLOCK_SCALE	util/mem.c	/^#define SUPERBLOCK_SCALE /;"	d	file:
+SUPERBLOCK_SIZE	util/mem.c	/^#define SUPERBLOCK_SIZE /;"	d	file:
+SYNC_ADD	include/common.h	/^#define SYNC_ADD /;"	d
+SYNC_CAS	include/common.h	/^#define SYNC_CAS /;"	d
+SYNC_FETCH_AND_OR	include/common.h	/^#define SYNC_FETCH_AND_OR /;"	d
+SYNC_SWAP	include/common.h	/^#define SYNC_SWAP /;"	d
+TAG	include/common.h	/^#define TAG /;"	d
+TAG_VALUE	include/common.h	/^#define TAG_VALUE(/;"	d
+TESTS	makefile	/^TESTS  := $(addsuffix _test, $(addprefix output\/,rcu list ht txn))$/;"	m
+TLS_H	include/tls.h	/^#define TLS_H$/;"	d
+TOMBSTONE	struct/ht.c	/^#define TOMBSTONE /;"	d	file:
+TRACE	include/lwt.h	/^#define TRACE(/;"	d
+TRUE	include/common.h	/^#define TRUE /;"	d
+TXN_ABORTED	txn/txn.c	/^typedef enum { TXN_RUNNING, TXN_VALIDATING, TXN_VALIDATED, TXN_ABORTED } txn_state_t;$/;"	e	enum:__anon5	file:
+TXN_BLIND_WRITE	include/txn.h	/^typedef enum { TXN_READ_WRITE, TXN_READ_ONLY, TXN_BLIND_WRITE } txn_access_t;$/;"	e	enum:__anon3
+TXN_DIRTY_READ	include/txn.h	/^typedef enum { TXN_DIRTY_READ, TXN_READ_COMMITTED, TXN_REPEATABLE_READ } txn_isolation_t;$/;"	e	enum:__anon4
+TXN_READ_COMMITTED	include/txn.h	/^typedef enum { TXN_DIRTY_READ, TXN_READ_COMMITTED, TXN_REPEATABLE_READ } txn_isolation_t;$/;"	e	enum:__anon4
+TXN_READ_ONLY	include/txn.h	/^typedef enum { TXN_READ_WRITE, TXN_READ_ONLY, TXN_BLIND_WRITE } txn_access_t;$/;"	e	enum:__anon3
+TXN_READ_WRITE	include/txn.h	/^typedef enum { TXN_READ_WRITE, TXN_READ_ONLY, TXN_BLIND_WRITE } txn_access_t;$/;"	e	enum:__anon3
+TXN_REPEATABLE_READ	include/txn.h	/^typedef enum { TXN_DIRTY_READ, TXN_READ_COMMITTED, TXN_REPEATABLE_READ } txn_isolation_t;$/;"	e	enum:__anon4
+TXN_RUNNING	txn/txn.c	/^typedef enum { TXN_RUNNING, TXN_VALIDATING, TXN_VALIDATED, TXN_ABORTED } txn_state_t;$/;"	e	enum:__anon5	file:
+TXN_VALIDATED	txn/txn.c	/^typedef enum { TXN_RUNNING, TXN_VALIDATING, TXN_VALIDATED, TXN_ABORTED } txn_state_t;$/;"	e	enum:__anon5	file:
+TXN_VALIDATING	txn/txn.c	/^typedef enum { TXN_RUNNING, TXN_VALIDATING, TXN_VALIDATED, TXN_ABORTED } txn_state_t;$/;"	e	enum:__anon5	file:
+TestFunction	include/CuTest.h	/^typedef void (*TestFunction)(CuTest *);$/;"	t
+UNDETERMINED_VERSION	txn/txn.c	/^#define UNDETERMINED_VERSION /;"	d	file:
+UPDATE_TYPE_DELETE	txn/txn.c	/^typedef enum { UPDATE_TYPE_PUT, UPDATE_TYPE_DELETE } update_type_t;$/;"	e	enum:__anon6	file:
+UPDATE_TYPE_PUT	txn/txn.c	/^typedef enum { UPDATE_TYPE_PUT, UPDATE_TYPE_DELETE } update_type_t;$/;"	e	enum:__anon6	file:
+UTIL_SRCS	makefile	/^UTIL_SRCS      := util\/rcu.c util\/lwt.c util\/CuTest.c util\/mem.c util\/nbd.c$/;"	m
+YAMS_H	include/common.h	/^#define YAMS_H$/;"	d
+access	txn/txn.c	/^    txn_access_t access;$/;"	m	struct:txn	file:
+alloc_update_rec	txn/txn.c	/^update_rec_t *alloc_update_rec (void) {$/;"	f
+basic_test	struct/ht_test.c	/^void basic_test (CuTest* tc) {$/;"	f
+block	util/mem.c	/^typedef struct block {$/;"	s	file:
+block_t	util/mem.c	/^} block_t;$/;"	t	typeref:struct:block	file:
+buf_count_	util/lwt.c	/^static int buf_count_ = 0;$/;"	v	file:
+buffer	include/CuTest.h	/^	char* buffer;$/;"	m	struct:__anon1
+concurrent_insert	struct/ht_test.c	/^void concurrent_insert (CuTest* tc) {$/;"	f
+concurrent_simple	struct/ht_test.c	/^void concurrent_simple (CuTest* tc) {$/;"	f
+count	include/CuTest.h	/^	int count;$/;"	m	struct:__anon2
+count	struct/ht.c	/^    int count; \/\/ TODO: make these counters distributed$/;"	m	struct:hash_table_i	file:
+deferred_	struct/ht.c	/^static hash_table_i_t *deferred_ = NULL;$/;"	v	file:
+dequeue	struct/queue.c	/^queue_elem_t dequeue (queue_t *q)$/;"	f
+dump_buffer	util/lwt.c	/^static void dump_buffer (FILE *file, int thread_id, uint64_t offset)$/;"	f	file:
+dump_record	util/lwt.c	/^static inline void dump_record (FILE *file, int thread_id, lwt_record_t *r, uint64_t offset)$/;"	f	file:
+enqueue	struct/queue.c	/^void enqueue (queue_t *q, queue_elem_t *e)$/;"	f
+entry_t	struct/ht.c	/^} entry_t;$/;"	t	typeref:struct:ht_entry	file:
+failCount	include/CuTest.h	/^	int failCount;$/;"	m	struct:__anon2
+failed	include/CuTest.h	/^	int failed;$/;"	m	struct:CuTest
+fifo	util/rcu.c	/^typedef struct fifo {$/;"	s	file:
+fifo_alloc	util/rcu.c	/^static fifo_t *fifo_alloc(int scale)$/;"	f	file:
+fifo_dequeue	util/rcu.c	/^static void *fifo_dequeue (fifo_t *q)$/;"	f	file:
+fifo_enqueue	util/rcu.c	/^static void fifo_enqueue (fifo_t *q, void *x)$/;"	f	file:
+fifo_index	util/rcu.c	/^static uint32_t fifo_index (fifo_t *q, uint32_t i)$/;"	f	file:
+fifo_t	util/rcu.c	/^} fifo_t;$/;"	t	typeref:struct:fifo	file:
+find_pred_and_item	struct/list.c	/^static void find_pred_and_item (node_t **pred_ptr, node_t **item_ptr, list_t *list, int key)$/;"	f	file:
+flag_mask_	util/lwt.c	/^uint64_t flag_mask_ = 0;$/;"	v
+flags_	util/lwt.c	/^static const char *flags_ = "";$/;"	v	file:
+format	include/lwt.h	/^    const char *format;$/;"	m	struct:lwt_record
+free	include/common.h	/^#define free /;"	d
+free_list_	util/mem.c	/^static block_t free_list_[NUM_THREADS][MAX_SCALE+1][NUM_THREADS];$/;"	v	file:
+function	include/CuTest.h	/^	TestFunction function;$/;"	m	struct:CuTest
+get_new_superblock	util/mem.c	/^static void *get_new_superblock (int scale) {$/;"	f	file:
+get_next_ndx	struct/ht.c	/^static inline int get_next_ndx(int old_ndx, uint32_t key_hash, int ht_scale) {$/;"	f	file:
+hash_table_i	struct/ht.c	/^typedef struct hash_table_i {$/;"	s	file:
+hash_table_i_t	struct/ht.c	/^} hash_table_i_t;$/;"	t	typeref:struct:hash_table_i	file:
+hash_table_t	include/ht.h	/^typedef struct hash_table_i *hash_table_t;$/;"	t	typeref:struct:hash_table_i
+head	include/lwt.h	/^    uint32_t head;$/;"	m	struct:lwt_buffer
+head	struct/list.c	/^    node_t head[1];$/;"	m	struct:list	file:
+head	struct/queue.c	/^    queue_elem_t *head;$/;"	m	struct:queue	file:
+head	util/rcu.c	/^    node_t *head;$/;"	m	struct:lifo	file:
+head	util/rcu.c	/^    uint32_t head;$/;"	m	struct:fifo	file:
+header	util/mem.c	/^typedef struct header {$/;"	s	file:
+header_t	util/mem.c	/^} header_t;$/;"	t	typeref:struct:header	file:
+ht	struct/ht.c	/^    hash_table_t *ht; \/\/ parent ht;$/;"	m	struct:hash_table_i	file:
+ht	struct/ht_test.c	/^    hash_table_t *ht;$/;"	m	struct:worker_data	file:
+ht	txn/txn.c	/^    hash_table_t *ht;$/;"	m	struct:txn	file:
+ht_add	struct/ht_test.c	/^int64_t ht_add (hash_table_t *ht, const char *key, int64_t val) {$/;"	f
+ht_alloc	struct/ht.c	/^hash_table_t *ht_alloc (void) {$/;"	f
+ht_compare_and_set	struct/ht.c	/^int64_t ht_compare_and_set (hash_table_t *ht, const char *key_string, $/;"	f
+ht_count	struct/ht.c	/^uint64_t ht_count (hash_table_t *ht) {$/;"	f
+ht_entry	struct/ht.c	/^typedef struct ht_entry {$/;"	s	file:
+ht_free	struct/ht.c	/^void ht_free (hash_table_t *ht) {$/;"	f
+ht_free_deferred	struct/ht.c	/^void ht_free_deferred (void) {$/;"	f
+ht_get	struct/ht.c	/^int64_t ht_get (hash_table_t *ht, const char *key_string) {$/;"	f
+ht_key_equals	struct/ht.c	/^static inline int ht_key_equals (uint64_t a, uint32_t b_hash, const char *b_value) {$/;"	f	file:
+ht_remove	struct/ht.c	/^int64_t ht_remove (hash_table_t *ht, const char *key_string) {$/;"	f
+ht_replace	struct/ht_test.c	/^int64_t ht_replace (hash_table_t *ht, const char *key, int64_t val) {$/;"	f
+ht_set	struct/ht_test.c	/^int64_t ht_set (hash_table_t *ht, const char *key, int64_t val) {$/;"	f
+ht_test_SRCS	makefile	/^ht_test_SRCS   := $(UTIL_SRCS) struct\/ht.c struct\/ht_test.c$/;"	m
+hti_alloc	struct/ht.c	/^static hash_table_i_t *hti_alloc (hash_table_t *parent, int scale) {$/;"	f	file:
+hti_compare_and_set	struct/ht.c	/^static int64_t hti_compare_and_set (hash_table_i_t *hti, uint32_t key_hash, const char *key_string, $/;"	f	file:
+hti_copy_entry	struct/ht.c	/^static int hti_copy_entry (hash_table_i_t *old_hti, volatile entry_t *old_e, uint32_t key_hash, $/;"	f	file:
+hti_defer_free	struct/ht.c	/^static void hti_defer_free (hash_table_i_t *hti) {$/;"	f	file:
+hti_get	struct/ht.c	/^static int64_t hti_get (hash_table_i_t *hti, uint32_t key_hash, const char *key_string) {$/;"	f	file:
+hti_lookup	struct/ht.c	/^static volatile entry_t *hti_lookup (hash_table_i_t *hti, uint32_t key_hash, const char *key_string, int *is_empty) {$/;"	f	file:
+hti_start_copy	struct/ht.c	/^static void hti_start_copy (hash_table_i_t *hti) {$/;"	f	file:
+id	struct/ht_test.c	/^    int id;$/;"	m	struct:worker_data	file:
+inserter_worker	struct/ht_test.c	/^void *inserter_worker (void *arg) {$/;"	f
+int64_t	include/common.h	/^typedef long long int64_t;$/;"	t
+isolation	txn/txn.c	/^    txn_isolation_t isolation;$/;"	m	struct:txn	file:
+jumpBuf	include/CuTest.h	/^	jmp_buf *jumpBuf;$/;"	m	struct:CuTest
+key	struct/ht.c	/^    int64_t key;$/;"	m	struct:ht_entry	file:
+key	struct/list.c	/^    int key;$/;"	m	struct:node	file:
+key	txn/txn.c	/^    struct { const char *key; update_rec_t *rec; } *writes;$/;"	m	struct:txn::__anon7	file:
+last	struct/list.c	/^    node_t last;$/;"	m	struct:list	file:
+last_posted_	util/rcu.c	/^static uint64_t **last_posted_;$/;"	v	file:
+length	include/CuTest.h	/^	int length;$/;"	m	struct:__anon1
+lifo	util/rcu.c	/^typedef struct lifo {$/;"	s	file:
+lifo_aba_pop	util/rcu.c	/^node_t *lifo_aba_pop (lifo_t *stk)$/;"	f
+lifo_aba_push	util/rcu.c	/^static void lifo_aba_push (lifo_t *stk, node_t *x)$/;"	f	file:
+lifo_alloc	util/rcu.c	/^static lifo_t *lifo_alloc (void)$/;"	f	file:
+lifo_t	util/rcu.c	/^} lifo_t;$/;"	t	typeref:struct:lifo	file:
+list	include/CuTest.h	/^	CuTest* list[MAX_TEST_CASES];$/;"	m	struct:__anon2
+list	struct/list.c	/^typedef struct list {$/;"	s	file:
+list_	struct/list.c	/^static list_t *list_;$/;"	v	file:
+list_alloc	struct/list.c	/^list_t *list_alloc (void)$/;"	f
+list_insert	struct/list.c	/^int list_insert (list_t *list, node_t *item)$/;"	f
+list_node_alloc	struct/list.c	/^node_t *list_node_alloc (int key)$/;"	f
+list_node_init	struct/list.c	/^static void list_node_init (node_t *item, int key)$/;"	f	file:
+list_print	struct/list.c	/^void list_print (list_t *list)$/;"	f
+list_remove	struct/list.c	/^node_t *list_remove (list_t *list, int key)$/;"	f
+list_t	struct/list.c	/^} list_t;$/;"	t	typeref:struct:list	file:
+list_test_SRCS	makefile	/^list_test_SRCS := $(UTIL_SRCS) struct\/list.c$/;"	m
+lwt_buf_	util/lwt.c	/^lwt_buffer_t **lwt_buf_ = NULL;$/;"	v
+lwt_buffer	include/lwt.h	/^typedef struct lwt_buffer {$/;"	s
+lwt_buffer_t	include/lwt.h	/^} lwt_buffer_t;$/;"	t	typeref:struct:lwt_buffer
+lwt_dump	util/lwt.c	/^void lwt_dump (const char *file_name)$/;"	f
+lwt_init	util/lwt.c	/^void lwt_init (void)$/;"	f
+lwt_record	include/lwt.h	/^typedef struct lwt_record {$/;"	s
+lwt_record_t	include/lwt.h	/^} lwt_record_t;$/;"	t	typeref:struct:lwt_record
+lwt_set_trace_level	util/lwt.c	/^void lwt_set_trace_level (const char *flags)$/;"	f
+lwt_thread_init	util/lwt.c	/^void lwt_thread_init (int thread_id)$/;"	f
+lwt_trace	include/lwt.h	/^static inline void lwt_trace (const char *flag, const char *format, size_t value1, size_t value2) {$/;"	f
+main	struct/ht_test.c	/^int main (void) {$/;"	f
+main	struct/list.c	/^int main (int argc, char **argv)$/;"	f
+main	txn/txn.c	/^int main (void) {$/;"	f
+main	util/rcu.c	/^int main (void)$/;"	f
+malloc	include/common.h	/^#define malloc /;"	d
+max_probe	struct/ht.c	/^    int max_probe;$/;"	m	struct:hash_table_i	file:
+mem_init	util/mem.c	/^void mem_init (void) {$/;"	f
+message	include/CuTest.h	/^	const char* message;$/;"	m	struct:CuTest
+murmur32	include/murmur.h	/^static inline uint32_t murmur32 (const char *key, int len)$/;"	f
+name	include/CuTest.h	/^	const char* name;$/;"	m	struct:CuTest
+nbd_defer_free	util/rcu.c	/^void nbd_defer_free (void *x)$/;"	f
+nbd_free	util/mem.c	/^void nbd_free (void *x) {$/;"	f
+nbd_init	util/nbd.c	/^void nbd_init (void) {$/;"	f
+nbd_malloc	util/mem.c	/^void *nbd_malloc (size_t n) {$/;"	f
+nbd_thread_init	util/nbd.c	/^void nbd_thread_init (int id) {$/;"	f
+next	struct/ht.c	/^    struct hash_table_i *next;$/;"	m	struct:hash_table_i	typeref:struct:hash_table_i::hash_table_i	file:
+next	struct/list.c	/^    struct node *next;$/;"	m	struct:node	typeref:struct:node::node	file:
+next	struct/queue.c	/^    struct queue_elem *next;$/;"	m	struct:queue_elem	typeref:struct:queue_elem::queue_elem	file:
+next	util/mem.c	/^    struct block *next;$/;"	m	struct:block	typeref:struct:block::block	file:
+next	util/rcu.c	/^    struct node *next;$/;"	m	struct:node	typeref:struct:node::node	file:
+next_free	struct/ht.c	/^    struct hash_table_i *next_free;$/;"	m	struct:hash_table_i	typeref:struct:hash_table_i::hash_table_i	file:
+node	struct/list.c	/^typedef struct node {$/;"	s	file:
+node	util/rcu.c	/^typedef struct node {$/;"	s	file:
+node_alloc	util/rcu.c	/^node_t *node_alloc (void)$/;"	f
+node_t	struct/list.c	/^} node_t;$/;"	t	typeref:struct:node	file:
+node_t	util/rcu.c	/^} node_t;$/;"	t	typeref:struct:node	file:
+num_entries_copied	struct/ht.c	/^    int num_entries_copied;$/;"	m	struct:hash_table_i	file:
+num_threads_	struct/list.c	/^static long num_threads_;$/;"	v	file:
+owner	util/mem.c	/^    char owner; \/\/ thread id of owner$/;"	m	struct:header	file:
+pending_	util/rcu.c	/^static fifo_t **pending_;$/;"	v	file:
+prev	txn/txn.c	/^    update_rec_t *prev; \/\/ a previous update$/;"	m	struct:update_rec	file:
+queue	struct/queue.c	/^typedef struct queue {$/;"	s	file:
+queue_elem	struct/queue.c	/^typedef struct queue_elem {$/;"	s	file:
+queue_elem_t	struct/queue.c	/^} queue_elem_t;$/;"	t	typeref:struct:queue_elem	file:
+queue_t	struct/queue.c	/^} queue_t;$/;"	t	typeref:struct:queue	file:
+ran	include/CuTest.h	/^	int ran;$/;"	m	struct:CuTest
+rcu_	util/rcu.c	/^static uint64_t **rcu_;$/;"	v	file:
+rcu_init	util/rcu.c	/^void rcu_init (void)$/;"	f
+rcu_post	util/rcu.c	/^static void rcu_post (uint64_t x)$/;"	f	file:
+rcu_test_SRCS	makefile	/^rcu_test_SRCS  := $(UTIL_SRCS)$/;"	m
+rcu_update	util/rcu.c	/^void rcu_update (void)$/;"	f
+rec	txn/txn.c	/^    struct { const char *key; update_rec_t *rec; } *writes;$/;"	m	struct:txn::__anon7	file:
+rv	txn/txn.c	/^    uint64_t rv;$/;"	m	struct:txn	file:
+sb_header_	util/mem.c	/^static header_t *sb_header_ = NULL;$/;"	v	file:
+scale	struct/ht.c	/^    unsigned int scale;$/;"	m	struct:hash_table_i	file:
+scale	util/mem.c	/^    char scale; \/\/ log2 of block size$/;"	m	struct:header	file:
+scale	util/rcu.c	/^    uint32_t scale;$/;"	m	struct:fifo	file:
+scan	struct/ht.c	/^    int scan;$/;"	m	struct:hash_table_i	file:
+simple_worker	struct/ht_test.c	/^void *simple_worker (void *arg) {$/;"	f
+size	include/CuTest.h	/^	int size;$/;"	m	struct:__anon1
+state	txn/txn.c	/^    txn_state_t state;$/;"	m	struct:txn	file:
+stk_	util/rcu.c	/^static lifo_t *stk_;$/;"	v	file:
+table	struct/ht.c	/^    volatile entry_t *table;$/;"	m	struct:hash_table_i	file:
+tail	struct/queue.c	/^    queue_elem_t *tail;$/;"	m	struct:queue	file:
+tail	util/rcu.c	/^    uint32_t tail;$/;"	m	struct:fifo	file:
+tc	struct/ht_test.c	/^    CuTest *tc;$/;"	m	struct:worker_data	file:
+timestamp	include/lwt.h	/^    uint64_t timestamp;$/;"	m	struct:lwt_record
+txn	txn/txn.c	/^struct txn {$/;"	s	file:
+txn_abort	txn/txn.c	/^void txn_abort (txn_t *txn) {$/;"	f
+txn_access_t	include/txn.h	/^typedef enum { TXN_READ_WRITE, TXN_READ_ONLY, TXN_BLIND_WRITE } txn_access_t;$/;"	t	typeref:enum:__anon3
+txn_begin	txn/txn.c	/^txn_t *txn_begin (txn_access_t access, txn_isolation_t isolation, hash_table_t *ht) {$/;"	f
+txn_commit	txn/txn.c	/^txn_state_t txn_commit (txn_t *txn) {$/;"	f
+txn_ht_get	txn/txn.c	/^int64_t txn_ht_get (txn_t *txn, const char *key) {$/;"	f
+txn_ht_put	txn/txn.c	/^void txn_ht_put (txn_t *txn, const char *key, int64_t value) {$/;"	f
+txn_ht_validate_key	txn/txn.c	/^static txn_state_t txn_ht_validate_key (txn_t *txn, const char *key) {$/;"	f	file:
+txn_isolation_t	include/txn.h	/^typedef enum { TXN_DIRTY_READ, TXN_READ_COMMITTED, TXN_REPEATABLE_READ } txn_isolation_t;$/;"	t	typeref:enum:__anon4
+txn_state_t	txn/txn.c	/^typedef enum { TXN_RUNNING, TXN_VALIDATING, TXN_VALIDATED, TXN_ABORTED } txn_state_t;$/;"	t	typeref:enum:__anon5	file:
+txn_t	include/txn.h	/^typedef struct txn txn_t;$/;"	t	typeref:struct:txn
+txn_test_SRCS	makefile	/^txn_test_SRCS  := $(UTIL_SRCS) struct\/ht.c txn\/txn.c$/;"	m
+txn_validate	txn/txn.c	/^static txn_state_t txn_validate (txn_t *txn) {$/;"	f	file:
+type	txn/txn.c	/^    update_type_t type;$/;"	m	struct:update_rec	file:
+uint32_t	include/common.h	/^typedef unsigned int uint32_t;$/;"	t
+uint64_t	include/common.h	/^typedef unsigned long long uint64_t;$/;"	t
+update_rec	txn/txn.c	/^struct update_rec {$/;"	s	file:
+update_rec_t	txn/txn.c	/^typedef struct update_rec update_rec_t;$/;"	t	typeref:struct:update_rec	file:
+update_type_t	txn/txn.c	/^typedef enum { UPDATE_TYPE_PUT, UPDATE_TYPE_DELETE } update_type_t;$/;"	t	typeref:enum:__anon6	file:
+value	struct/ht.c	/^    int64_t value;$/;"	m	struct:ht_entry	file:
+value	txn/txn.c	/^    uint64_t value;$/;"	m	struct:update_rec	file:
+value1	include/lwt.h	/^    size_t value1;$/;"	m	struct:lwt_record
+value2	include/lwt.h	/^    size_t value2;$/;"	m	struct:lwt_record
+version	txn/txn.c	/^    uint64_t version;$/;"	m	struct:update_rec	file:
+wait	struct/ht_test.c	/^    int *wait;$/;"	m	struct:worker_data	file:
+wait_	struct/list.c	/^static volatile int wait_;$/;"	v	file:
+wait_	util/rcu.c	/^static volatile int wait_;$/;"	v	file:
+worker	struct/list.c	/^void *worker (void *arg)$/;"	f
+worker	util/rcu.c	/^void *worker (void *arg)$/;"	f
+worker_data	struct/ht_test.c	/^typedef struct worker_data {$/;"	s	file:
+worker_data_t	struct/ht_test.c	/^} worker_data_t;$/;"	t	typeref:struct:worker_data	file:
+writes	txn/txn.c	/^    struct { const char *key; update_rec_t *rec; } *writes;$/;"	m	struct:txn	typeref:struct:txn::__anon7	file:
+writes_count	txn/txn.c	/^    uint32_t writes_count;$/;"	m	struct:txn	file:
+writes_scan	txn/txn.c	/^    uint32_t writes_scan;$/;"	m	struct:txn	file:
+writes_size	txn/txn.c	/^    uint32_t writes_size;$/;"	m	struct:txn	file:
+wv	txn/txn.c	/^    uint64_t wv;$/;"	m	struct:txn	file:
+x	include/lwt.h	/^    lwt_record_t x[0];$/;"	m	struct:lwt_buffer
+x	util/rcu.c	/^    void *x[0];$/;"	m	struct:fifo	file:
