@@ -217,7 +217,7 @@ static int hti_copy_entry (hash_table_i_t *old_hti, volatile entry_t *old_e, uin
     // be freed.
     assert(COPIED_VALUE == TAG_VALUE(TOMBSTONE));
     if (old_e_value == TOMBSTONE) {
-        nbd_free((string_t *)(old_e->key & MASK(48)));
+        nbd_defer_free((string_t *)(old_e->key & MASK(48)));
         return TRUE; 
     }
     old_e_value = STRIP_TAG(old_e_value);
