@@ -11,10 +11,10 @@ INCS   := $(addprefix -I, include)
 TESTS  := output/rcu_test output/list_test output/ht_test
 EXES   := $(TESTS)
 
-UTIL_SRCS      := util/nbd.c util/rcu.c util/lwt.c util/CuTest.c util/mem.c
-rcu_test_SRCS  := $(UTIL_SRCS)
-list_test_SRCS := $(UTIL_SRCS) struct/list.c
-ht_test_SRCS   := $(UTIL_SRCS) struct/ht.c struct/ht_test.c
+RUNTIME_SRCS   := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c runtime/CuTest.c
+rcu_test_SRCS  := $(RUNTIME_SRCS)
+list_test_SRCS := $(RUNTIME_SRCS) struct/list.c
+ht_test_SRCS   := $(RUNTIME_SRCS) struct/ht.c struct/ht_test.c
 
 tests: $(TESTS) 
 
