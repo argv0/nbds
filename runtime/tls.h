@@ -12,7 +12,7 @@
 #define DECLARE_THREAD_LOCAL (name, type)  type name
 #define INIT_THREAD_LOCAL    (name, value) name = value
 #define SET_THREAD_LOCAL     (name, value) name = value
-#define LOCALIZE_THREAD_LOCAL(name, type)  extern __thread type name
+#define LOCALIZE_THREAD_LOCAL(name, type)
 
 #else//!__ELF__
 
@@ -20,15 +20,14 @@
 
 #define DECLARE_THREAD_LOCAL(name, type) pthread_key_t name##_KEY
 
-#define INIT_THREAD_LOCAL(name, value) \
+#define INIT_THREAD_LOCAL(name) \
     do { \
-        if (pthread_key_create(&name##_KEY, (void *)(size_t)value) != 0) { assert(FALSE); } \
+        if (pthread_key_create(&name##_KEY, NULL) != 0) { assert(FALSE); } \
     } while (0)
 
 #define SET_THREAD_LOCAL(name, value) pthread_setspecific(name##_KEY, (void *)(size_t)value);
 
-#define LOCALIZE_THREAD_LOCAL(name, type) \
-    extern pthread_key_t name##_KEY; type name = (type)(size_t)pthread_getspecific(name##_KEY)
+#define LOCALIZE_THREAD_LOCAL(name, type) type name = (type)(size_t)pthread_getspecific(name##_KEY)
 
 #endif//__ELF__
 #endif//TLS_H

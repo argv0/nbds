@@ -8,8 +8,8 @@
 #include <stdio.h>
 #include <errno.h>
 #include "common.h"
+#include "runtime_local.h"
 #include "lwt.h"
-#include "tls.h"
 
 #define GET_SCALE(n) (sizeof(n)*8-__builtin_clzl((n)-1)) // log2 of <n>, rounded up
 #define MAX_SCALE 31 // allocate blocks up to 4GB in size (arbitrary, could be bigger)
@@ -61,7 +61,7 @@ void nbd_free (void *x) {
     assert(((size_t)b >> REGION_SCALE) < ((1 << HEADER_REGION_SCALE) / sizeof(header_t)));
     header_t *h = region_header_ + ((size_t)b >> REGION_SCALE);
     TRACE("m0", "nbd_free(): block %p scale %llu", x, h->scale);
-    block_t  *l = &free_list_[(int)h->owner][(int)h->scale][tid_];
+    block_t  *l = &free_list_[h->owner][h->scale][tid_];
     TRACE("m0", "nbd_free(): free list %p first block %p", l, l->next);
     b->next = l->next;
     l->next = b;

@@ -130,8 +130,8 @@ void simple_add_remove (CuTest* tc) {
         wd[i].tc = tc;
         wd[i].ht = ht;
         wd[i].wait = &wait;
-        int rc = pthread_create(thread + i, NULL, simple_worker, wd + i);
-        if (rc != 0) { perror("pthread_create"); return; }
+        int rc = nbd_thread_create(thread + i, i, simple_worker, wd + i);
+        if (rc != 0) { perror("nbd_thread_create"); return; }
     }
     for (i = 0; i < 2; ++i) {
         pthread_join(thread[i], NULL);

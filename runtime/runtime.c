@@ -9,9 +9,6 @@
 #include "mem.h"
 #include "tls.h"
 
-#undef malloc
-#undef free
-
 DECLARE_THREAD_LOCAL(tid_, int);
 
 typedef struct thread_info {
@@ -21,9 +18,9 @@ typedef struct thread_info {
 } thread_info_t;
 
 void nbd_init (void) {
-    INIT_THREAD_LOCAL(tid_, NULL);
+    INIT_THREAD_LOCAL(tid_);
+    SET_THREAD_LOCAL(tid_, 0);
     mem_init();
-    lwt_init();
     lwt_thread_init(0);
     rcu_thread_init(0);
 }
@@ -34,12 +31,12 @@ static void *worker (void *arg) {
     lwt_thread_init(ti->thread_id);
     rcu_thread_init(ti->thread_id);
     void *ret = ti->start_routine(ti->arg);
-    free(ti);
+    nbd_free(ti);
     return ret;
 }
 
 int nbd_thread_create (pthread_t *restrict thread, int thread_id, void *(*start_routine)(void *), void *restrict arg) {
-    thread_info_t *ti = (thread_info_t *)malloc(sizeof(thread_info_t));
+    thread_info_t *ti = (thread_info_t *)nbd_malloc(sizeof(thread_info_t));
     ti->thread_id = thread_id;
     ti->start_routine = start_routine;
     ti->arg = arg;
