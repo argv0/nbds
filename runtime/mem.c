@@ -23,8 +23,8 @@ typedef struct block {
 
 // region header
 typedef struct header {
-    char owner; // thread id of owner
-    char scale; // log2 of the block size
+    uint8_t owner; // thread id of owner
+    uint8_t scale; // log2 of the block size
 } header_t;
 
 static header_t *region_header_ = NULL;

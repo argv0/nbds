@@ -17,9 +17,9 @@ typedef struct hash_table_i *hash_table_t;
 
 hash_table_t *ht_alloc (void);
 void ht_free (hash_table_t *ht);
-int64_t ht_get (hash_table_t *ht, const char *key, uint32_t len);
-int64_t ht_compare_and_set (hash_table_t *ht, const char *key, uint32_t key_len, int64_t expected_val, int64_t val);
-int64_t ht_remove (hash_table_t *ht, const char *key, uint32_t len);
+uint64_t ht_get (hash_table_t *ht, const char *key, uint32_t len);
+uint64_t ht_compare_and_set (hash_table_t *ht, const char *key, uint32_t key_len, uint64_t expected_val, uint64_t val);
+uint64_t ht_remove (hash_table_t *ht, const char *key, uint32_t len);
 uint64_t ht_count (hash_table_t *ht);
 
 #endif//HT_H

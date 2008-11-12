@@ -11,6 +11,22 @@
 #include "lwt.h"
 #include "mem.h"
 
+#define LWT_BUFFER_SCALE 16
+#define LWT_BUFFER_SIZE (1 << LWT_BUFFER_SCALE)
+#define LWT_BUFFER_MASK (LWT_BUFFER_SIZE - 1)
+
+typedef struct lwt_record {
+    uint64_t timestamp;
+    const char *format;
+    size_t value1;
+    size_t value2;
+} lwt_record_t;
+
+typedef struct lwt_buffer {
+    uint32_t head;
+    lwt_record_t x[0];
+} lwt_buffer_t;
+
 DECLARE_THREAD_LOCAL(tb_, int);
 
 lwt_buffer_t *lwt_buf_[MAX_NUM_THREADS] = {};
@@ -107,5 +123,16 @@ void lwt_dump (const char *file_name)
         }
         fflush(file);
         fclose(file);
+    }
+}
+
+void lwt_trace_i (const char *format, size_t value1, size_t value2) {
+    LOCALIZE_THREAD_LOCAL(tb_, lwt_buffer_t *);
+    if (tb_) {
+        unsigned int u, l;
+        __asm__ __volatile__("rdtsc" : "=a" (l), "=d" (u)); 
+        uint64_t timestamp = ((uint64_t)u << 32) | l; 
+        lwt_record_t temp = { timestamp, format, value1, value2 };
+        tb_->x[tb_->head++ & LWT_BUFFER_MASK] = temp;
     }
 }

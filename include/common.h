@@ -11,6 +11,9 @@
 #include <string.h>
 #include <sys/types.h>
 
+#define malloc "DON'T USE MALLOC" // use nbd_malloc() instead
+#define free   "DON'T USE FREE"   // use nbd_free() instead
+
 #define MAX_NUM_THREADS 4 // make this whatever you want, but make it a power of 2
 
 #define CACHE_LINE_SIZE 64
@@ -32,16 +35,16 @@
 #define MASK(n)     ((1LL << (n)) - 1)
 
 #define TAG          (1LL << 63)
-#define IS_TAGGED(v) ((int64_t)(v) < 0)
-#define TAG_VALUE(v) ((int64_t)(v) |  TAG)
-#define STRIP_TAG(v) ((int64_t)(v) & ~TAG)
+#define IS_TAGGED(v) ((uint64_t)(v) < 0)
+#define TAG_VALUE(v) ((uint64_t)(v) |  TAG)
+#define STRIP_TAG(v) ((uint64_t)(v) & ~TAG)
 
 #define TRUE  1
 #define FALSE 0
 
-typedef          long long  int64_t;
 typedef unsigned long long uint64_t;
 typedef unsigned int       uint32_t;
+typedef unsigned char      uint8_t;
 
 #include "lwt.h"
 #endif //COMMON_H

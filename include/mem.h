@@ -4,7 +4,7 @@
  */
 #ifndef MEM_H
 #define MEM_H
-void mem_init (void);
-void nbd_free (void *x);
 void *nbd_malloc (size_t n);
+void nbd_free (void *x);
+void nbd_defer_free (void *x);
 #endif//MEM_H

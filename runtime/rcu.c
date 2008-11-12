@@ -6,10 +6,8 @@
  */
 #include <string.h>
 #include "common.h"
-#include "rcu.h"
 #include "lwt.h"
 #include "mem.h"
-#include "nbd.h"
 #include "tls.h"
 
 #define RCU_POST_THRESHOLD 10
@@ -101,9 +99,9 @@ void nbd_defer_free (void *x) {
 }
 
 #ifdef MAKE_rcu_test
-#include <pthread.h>
 #include <errno.h>
 #include <stdio.h>
+#include "runtime.h"
 
 #define NUM_ITERATIONS 10000000
 
@@ -152,7 +150,6 @@ node_t *node_alloc (void) {
 void *worker (void *arg) {
     int id = (int)(size_t)arg;
     unsigned int rand_seed = (unsigned int)id + 1;
-    nbd_thread_init(id);
 
     // Wait for all the worker threads to be ready.
     __sync_fetch_and_add(&wait_, -1);
@@ -199,7 +196,7 @@ int main (int argc, char **argv) {
 
     pthread_t thread[num_threads];
     for (int i = 0; i < num_threads; ++i) {
-        int rc = pthread_create(thread + i, NULL, worker, (void *)(size_t)i);
+        int rc = nbd_thread_create(thread + i, i, worker, (void *)(size_t)i);
         if (rc != 0) { perror("pthread_create"); return rc; }
     }
     for (int i = 0; i < num_threads; ++i) {

@@ -4,10 +4,9 @@
  */
 #include <stdio.h>
 #include <pthread.h>
+#include "runtime.h"
 #include "CuTest.h"
 #include "common.h"
-#include "nbd.h"
-#include "rcu.h"
 #include "ht.h"
 #include "mem.h"
 
@@ -96,7 +95,6 @@ void *simple_worker (void *arg) {
     uint64_t d = wd->id;
     int iters = 20000;
 
-    nbd_thread_init(d);
     SYNC_ADD(wd->wait, -1);
     do { } while (*((volatile worker_data_t *)wd)->wait); // wait for all workers to be ready
 
@@ -161,8 +159,6 @@ void concurrent_insert (CuTest* tc) {
 int main (void) {
 
     nbd_init();
-    nbd_thread_init(0);
-
     //lwt_set_trace_level("h4");
 
     // Create and run test suite

@@ -6,7 +6,7 @@
 # Makefile for building programs with whole-program interfile optimization 
 ###################################################################################################
 OPT	   := -fwhole-program -combine -03 #-DNDEBUG
-CFLAGS := -g -Wall -Werror -std=c99 -m64 -fnested-functions $(OPT) #-DENABLE_TRACE 
+CFLAGS := -g -Wall -Werror -std=c99 -m64 -fnested-functions #$(OPT) #-DENABLE_TRACE 
 INCS   := $(addprefix -I, include)
 TESTS  := output/rcu_test output/list_test output/ht_test
 EXES   := $(TESTS)

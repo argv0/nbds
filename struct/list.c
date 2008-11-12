@@ -11,7 +11,6 @@
 
 #include "common.h"
 #include "lwt.h"
-#include "rcu.h"
 #include "mem.h"
 
 #define NUM_ITERATIONS 10000000
@@ -30,21 +29,18 @@ typedef struct list {
     node_t last;
 } list_t;
 
-static void list_node_init (node_t *item, int key)
-{
+static void list_node_init (node_t *item, int key) {
     memset(item, 0, sizeof(node_t));
     item->key = key;
 }
 
-node_t *list_node_alloc (int key)
-{
+node_t *list_node_alloc (int key) {
     node_t *item = (node_t *)nbd_malloc(sizeof(node_t));
     list_node_init(item, key);
     return item;
 }
 
-list_t *list_alloc (void)
-{
+list_t *list_alloc (void) {
     list_t *list = (list_t *)nbd_malloc(sizeof(list_t));
     list_node_init(list->head, INT_MIN);
     list_node_init(&list->last, INT_MAX);
@@ -52,8 +48,7 @@ list_t *list_alloc (void)
     return list;
 }
 
-static void find_pred_and_item (node_t **pred_ptr, node_t **item_ptr, list_t *list, int key)
-{
+static void find_pred_and_item (node_t **pred_ptr, node_t **item_ptr, list_t *list, int key) {
     node_t *pred = list->head;
     node_t *item = list->head->next; // head is never removed
     TRACE("l3", "find_pred_and_item: searching for key %llu in list (head is %p)", key, pred);
@@ -93,8 +88,7 @@ static void find_pred_and_item (node_t **pred_ptr, node_t **item_ptr, list_t *li
     } while (1);
 }
 
-int list_insert (list_t *list, node_t *item)
-{
+int list_insert (list_t *list, node_t *item) {
     TRACE("l3", "list_insert: inserting %p (with key %llu)", item, item->key);
     node_t *pred, *next, *other = (node_t *)-1;
     do {
@@ -121,8 +115,7 @@ int list_insert (list_t *list, node_t *item)
     return 1;
 }
 
-node_t *list_remove (list_t *list, int key)
-{
+node_t *list_remove (list_t *list, int key) {
     node_t *pred, *item, *next;
 
     TRACE("l3", "list_remove: removing item with key %llu", key, 0);
@@ -161,8 +154,7 @@ node_t *list_remove (list_t *list, int key)
     return item;
 }
 
-void list_print (list_t *list)
-{
+void list_print (list_t *list) {
     node_t *item;
     item = list->head;
     while (item) {
@@ -176,16 +168,14 @@ void list_print (list_t *list)
 #ifdef MAKE_list_test
 #include <errno.h>
 #include <pthread.h>
-#include "nbd.h"
+#include "runtime.h"
 
 static volatile int wait_;
 static long num_threads_;
 static list_t *list_;
 
-void *worker (void *arg)
-{
+void *worker (void *arg) {
     int id = (int)(size_t)arg;
-    nbd_thread_init(id);
 
     unsigned int rand_seed = id+1;//rdtsc_l();
 
@@ -217,8 +207,7 @@ void *worker (void *arg)
     return NULL;
 }
 
-int main (int argc, char **argv)
-{
+int main (int argc, char **argv) {
     nbd_init();
     //lwt_set_trace_level("m0l0");
 
@@ -259,7 +248,7 @@ int main (int argc, char **argv)
 
     int i;
     for (i = 0; i < num_threads_; ++i) {
-        int rc = pthread_create(thread + i, NULL, worker, (void*)(size_t)i);
+        int rc = nbd_thread_create(thread + i, i, worker, (void*)(size_t)i);
         if (rc != 0) { perror("pthread_create"); return rc; }
     }
 

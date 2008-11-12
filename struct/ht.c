@@ -16,7 +16,6 @@
 #include "ht.h"
 #include "murmur.h"
 #include "mem.h"
-#include "rcu.h"
 
 #define COPIED_VALUE            (-1)
 #define TOMBSTONE               STRIP_TAG(COPIED_VALUE)
@@ -27,8 +26,8 @@
 #define MAX_BUCKETS_TO_PROBE    250
 
 typedef struct ht_entry {
-    int64_t key;
-    int64_t value;
+    uint64_t key;
+    uint64_t value;
 } entry_t;
 
 typedef struct string {
@@ -49,7 +48,7 @@ typedef struct hash_table_i {
 } hash_table_i_t;
 
 static int hti_copy_entry 
-    (hash_table_i_t *old_hti, volatile entry_t *e, uint32_t e_key_hash, hash_table_i_t *new_hti);
+    (hash_table_i_t *ht1, volatile entry_t *e, uint32_t e_key_hash, hash_table_i_t *ht2);
 
 // Choose the next bucket to probe using the high-order bits of <key_hash>.
 static inline int get_next_ndx(int old_ndx, uint32_t key_hash, int ht_scale) {
@@ -175,31 +174,32 @@ static void hti_start_copy (hash_table_i_t *hti) {
     TRACE("h0", "hti_start_copy: new hti is %p", next, 0);
 }
 
-// Copy the key and value stored in <old_e> (which must be an entry in <old_hti>) to <new_hti>. 
+// Copy the key and value stored in <ht1_e> (which must be an entry in <ht1>) to <ht2>. 
 //
-// Return 1 unless <old_e> is already copied (then return 0), so the caller can account for the total
+// Return 1 unless <ht1_e> is already copied (then return 0), so the caller can account for the total
 // number of entries left to copy.
-static int hti_copy_entry (hash_table_i_t *old_hti, volatile entry_t *old_e, uint32_t key_hash, 
-                           hash_table_i_t *new_hti) {
-    TRACE("h0", "hti_copy_entry(copy entry from %p to %p)", old_hti, new_hti);
-    assert(old_hti);
-    assert(old_hti->next);
-    assert(new_hti);
-    assert(old_e >= old_hti->table && old_e < old_hti->table + (1 << old_hti->scale));
+static int hti_copy_entry (hash_table_i_t *ht1, volatile entry_t *ht1_e, uint32_t key_hash, 
+                           hash_table_i_t *ht2) {
+    TRACE("h0", "hti_copy_entry(copy entry from %p to %p)", ht1, ht2);
+    assert(ht1);
+    assert(ht1->next);
+    assert(ht2);
+    assert(ht1_e >= ht1->table && ht1_e < ht1->table + (1 << ht1->scale));
+    assert(key_hash == 0 || (key_hash >> 16) == (ht1_e->key >> 48));
 
-    int64_t old_e_value = old_e->value;
-    TRACE("h0", "hti_copy_entry: entry %p current value %p", old_e, old_e_value);
-    if (EXPECT_FALSE(old_e_value == COPIED_VALUE))
+    uint64_t ht1_e_value = ht1_e->value;
+    TRACE("h0", "hti_copy_entry: entry %p current value %p", ht1_e, ht1_e_value);
+    if (EXPECT_FALSE(ht1_e_value == COPIED_VALUE))
         return FALSE; // already copied
 
     // Kill empty entries.
-    if (EXPECT_FALSE(old_e_value == DOES_NOT_EXIST)) {
-        old_e_value = SYNC_CAS(&old_e->value, DOES_NOT_EXIST, COPIED_VALUE);
-        if (old_e_value == DOES_NOT_EXIST) {
+    if (EXPECT_FALSE(ht1_e_value == DOES_NOT_EXIST)) {
+        uint64_t ht1_e_value = SYNC_CAS(&ht1_e->value, DOES_NOT_EXIST, COPIED_VALUE);
+        if (ht1_e_value == DOES_NOT_EXIST) {
             TRACE("h0", "hti_copy_entry: old entry killed", 0, 0);
             return TRUE;
         }
-        if (old_e_value == COPIED_VALUE) {
+        if (ht1_e_value == COPIED_VALUE) {
             TRACE("h0", "hti_copy_entry: lost race to kill empty entry in old hti", 0, 0);
             return FALSE; // another thread beat us to it
         }
@@ -208,72 +208,72 @@ static int hti_copy_entry (hash_table_i_t *old_hti, volatile entry_t *old_e, uin
     }
 
     // Tag the value in the old entry to indicate a copy is in progress.
-    old_e_value = SYNC_FETCH_AND_OR(&old_e->value, TAG_VALUE(0));
-    TRACE("h0", "hti_copy_entry: tagged the value %p in old entry %p", old_e_value, old_e);
-    if (old_e_value == COPIED_VALUE) 
+    ht1_e_value = SYNC_FETCH_AND_OR(&ht1_e->value, TAG_VALUE(0));
+    TRACE("h0", "hti_copy_entry: tagged the value %p in old entry %p", ht1_e_value, ht1_e);
+    if (ht1_e_value == COPIED_VALUE) 
         return FALSE; // <value> was already copied by another thread.
 
     // Deleted entries don't need to be installed into to the new table, but their keys do need to
     // be freed.
     assert(COPIED_VALUE == TAG_VALUE(TOMBSTONE));
-    if (old_e_value == TOMBSTONE) {
-        nbd_defer_free((string_t *)(old_e->key & MASK(48)));
+    if (ht1_e_value == TOMBSTONE) {
+        nbd_defer_free((string_t *)(ht1_e->key & MASK(48)));
         return TRUE; 
     }
-    old_e_value = STRIP_TAG(old_e_value);
 
     // Install the key in the new table.
-    uint64_t old_e_key = old_e->key;
-    string_t *key = (string_t *)(old_e_key & MASK(48));
-    TRACE("h0", "hti_copy_entry: key %p is %s", old_e_key, key->val);
+    uint64_t key = ht1_e->key;
+    string_t *key_string = (string_t *)(key & MASK(48));
+    uint64_t value = STRIP_TAG(ht1_e_value);
+    TRACE("h0", "hti_copy_entry: key %p is %s", key, key_string->val);
 
     // We use 0 to indicate that <key_hash> isn't initiallized. Occasionally the <key_hash> will
     // really be 0 and we will waste time recomputing it. That is rare enough that it is OK. 
     if (key_hash == 0) { 
-        key_hash = murmur32(key->val, key->len);
+        key_hash = murmur32(key_string->val, key_string->len);
     }
 
     int is_empty;
-    volatile entry_t *new_e = hti_lookup(new_hti, key_hash, key->val, key->len, &is_empty);
+    volatile entry_t *ht2_e = hti_lookup(ht2, key_hash, key_string->val, key_string->len, &is_empty);
 
     // it is possible that there is not any room in the new table either
-    if (EXPECT_FALSE(new_e == NULL)) {
-        hti_start_copy(new_hti); // initiate nested copy, if not already started
-        return hti_copy_entry(old_hti, old_e, key_hash, new_hti->next); // recursive tail-call
+    if (EXPECT_FALSE(ht2_e == NULL)) {
+        hti_start_copy(ht2); // initiate nested copy, if not already started
+        return hti_copy_entry(ht1, ht1_e, key_hash, ht2->next); // recursive tail-call
     }
 
     // a tagged entry returned from hti_lookup() means it is either empty or has a new key
     if (is_empty) {
-        uint64_t new_e_key = SYNC_CAS(&new_e->key, DOES_NOT_EXIST, old_e_key);
-        if (new_e_key != DOES_NOT_EXIST) {
+        uint64_t old_ht2_e_key = SYNC_CAS(&ht2_e->key, DOES_NOT_EXIST, key);
+        if (old_ht2_e_key != DOES_NOT_EXIST) {
             TRACE("h0", "hti_copy_entry: lost race to CAS key %p into new entry; found %p",
-                    old_e_key, new_e_key);
-            return hti_copy_entry(old_hti, old_e, key_hash, new_hti); // recursive tail-call
+                    key, old_ht2_e_key);
+            return hti_copy_entry(ht1, ht1_e, key_hash, ht2); // recursive tail-call
         }
     }
-    assert(ht_key_equals(new_e->key, key_hash, key->val, key->len));
-    TRACE("h0", "hti_copy_entry: key %p installed in new old hti %p", key->val, new_hti);
+    assert(ht_key_equals(ht2_e->key, key_hash, key_string->val, key_string->len));
+    TRACE("h0", "hti_copy_entry: key %p installed in new old hti %p", key_string->val, ht2);
 
     // Copy the value to the entry in the new table.
-    uint64_t new_e_value = SYNC_CAS(&new_e->value, DOES_NOT_EXIST, old_e_value);
+    uint64_t old_ht2_e_value = SYNC_CAS(&ht2_e->value, DOES_NOT_EXIST, value);
 
     // If there is a nested copy in progress, we might have installed the key into a dead entry.
-    if (new_e_value == COPIED_VALUE)
-        return hti_copy_entry(old_hti, old_e, key_hash, new_hti->next); // recursive tail-call
+    if (old_ht2_e_value == COPIED_VALUE)
+        return hti_copy_entry(ht1, ht1_e, key_hash, ht2->next); // recursive tail-call
 
     // Mark the old entry as dead.
-    old_e->value = COPIED_VALUE;
+    ht1_e->value = COPIED_VALUE;
 
     // Update the count if we were the one that completed the copy.
-    if (new_e_value == DOES_NOT_EXIST) {
-        TRACE("h0", "hti_copy_entry: value %p installed in new hti %p", old_e_value, new_hti);
-        SYNC_ADD(&old_hti->count, -1);
-        SYNC_ADD(&new_hti->count, 1);
+    if (old_ht2_e_value == DOES_NOT_EXIST) {
+        TRACE("h0", "hti_copy_entry: value %p installed in new hti %p", value, ht2);
+        SYNC_ADD(&ht1->count, -1);
+        SYNC_ADD(&ht2->count, 1);
         return TRUE;
     }
 
     TRACE("h0", "hti_copy_entry: lost race to CAS value %p in new hti; found %p", 
-                old_e_value, new_e_value);
+                value, old_ht2_e_value);
     return FALSE; // another thread completed the copy
 }
 
@@ -291,8 +291,8 @@ static int hti_copy_entry (hash_table_i_t *old_hti, volatile entry_t *old_e, uin
 // real value matches (i.e. not a TOMBSTONE or DOES_NOT_EXIST) as long as <key> is in the table. If
 // <expected> is HT_EXPECT_WHATEVER then skip the test entirely.
 //
-static int64_t hti_compare_and_set (hash_table_i_t *hti, uint32_t key_hash, const char *key_val, 
-                                    uint32_t key_len, int64_t expected, int64_t new) {
+static uint64_t hti_compare_and_set (hash_table_i_t *hti, uint32_t key_hash, const char *key_val, 
+                                    uint32_t key_len, uint64_t expected, uint64_t new) {
     TRACE("h0", "hti_compare_and_set(hti %p key \"%s\")", hti, key_val);
     TRACE("h0", "hti_compare_and_set(new value %p; caller expects value %p)", new, expected);
     assert(hti);
@@ -337,7 +337,7 @@ static int64_t hti_compare_and_set (hash_table_i_t *hti, uint32_t key_hash, cons
     }
 
     // If the entry is in the middle of a copy, the copy must be completed first.
-    int64_t e_value = e->value;
+    uint64_t e_value = e->value;
     TRACE("h0", "hti_compare_and_set: value in entry %p is %p", e, e_value);
     if (EXPECT_FALSE(IS_TAGGED(e_value))) {
         int did_copy = hti_copy_entry(hti, e, key_hash, ((volatile hash_table_i_t *)hti)->next);
@@ -377,7 +377,7 @@ static int64_t hti_compare_and_set (hash_table_i_t *hti, uint32_t key_hash, cons
 }
 
 //
-static int64_t hti_get (hash_table_i_t *hti, uint32_t key_hash, const char *key_val, uint32_t key_len) {
+static uint64_t hti_get (hash_table_i_t *hti, uint32_t key_hash, const char *key_val, uint32_t key_len) {
     assert(key_val);
 
     int is_empty;
@@ -396,7 +396,7 @@ static int64_t hti_get (hash_table_i_t *hti, uint32_t key_hash, const char *key_
         return DOES_NOT_EXIST;
 
     // If the entry is being copied, finish the copy and retry on the next table.
-    int64_t e_value = e->value;
+    uint64_t e_value = e->value;
     if (EXPECT_FALSE(IS_TAGGED(e_value))) {
         if (EXPECT_FALSE(e_value != COPIED_VALUE)) {
             int did_copy = hti_copy_entry(hti, e, key_hash, ((volatile hash_table_i_t *)hti)->next);
@@ -411,13 +411,13 @@ static int64_t hti_get (hash_table_i_t *hti, uint32_t key_hash, const char *key_
 }
 
 //
-int64_t ht_get (hash_table_t *ht, const char *key_val, uint32_t key_len) {
+uint64_t ht_get (hash_table_t *ht, const char *key_val, uint32_t key_len) {
     return hti_get(*ht, murmur32(key_val, key_len), key_val, key_len);
 }
 
 //
-int64_t ht_compare_and_set (hash_table_t *ht, const char *key_val, uint32_t key_len, 
-                            int64_t expected_val, int64_t new_val) {
+uint64_t ht_compare_and_set (hash_table_t *ht, const char *key_val, uint32_t key_len, 
+                            uint64_t expected_val, uint64_t new_val) {
 
     assert(key_val);
     assert(!IS_TAGGED(new_val) && new_val != DOES_NOT_EXIST);
@@ -457,7 +457,7 @@ int64_t ht_compare_and_set (hash_table_t *ht, const char *key_val, uint32_t key_
         hti = *ht;
     }
 
-    int64_t old_val;
+    uint64_t old_val;
     uint32_t key_hash = murmur32(key_val, key_len);
     while ((old_val = hti_compare_and_set(hti, key_hash, key_val, key_len, expected_val, new_val)) 
            == COPIED_VALUE) {
@@ -470,9 +470,9 @@ int64_t ht_compare_and_set (hash_table_t *ht, const char *key_val, uint32_t key_
 
 // Remove the value in <ht> associated with <key_val>. Returns the value removed, or 
 // DOES_NOT_EXIST if there was no value for that key.
-int64_t ht_remove (hash_table_t *ht, const char *key_val, uint32_t key_len) {
+uint64_t ht_remove (hash_table_t *ht, const char *key_val, uint32_t key_len) {
     hash_table_i_t *hti = *ht;
-    int64_t val;
+    uint64_t val;
     uint32_t key_hash = murmur32(key_val, key_len);
     do {
         val = hti_compare_and_set(hti, key_hash, key_val, key_len, HT_EXPECT_WHATEVER, TOMBSTONE);
