@@ -517,6 +517,12 @@ hash_table_t *ht_alloc (void) {
 void ht_free (hash_table_t *ht) {
     hash_table_i_t *hti = *ht;
     do {
+        for (uint32_t i = 0; i < (1 << hti->scale); ++i) {
+            assert(hti->table[i].value == COPIED_VALUE || !IS_TAGGED(hti->table[i].value));
+            if (hti->table[i].key != DOES_NOT_EXIST) {
+                nbd_free((void *)(hti->table[i].key & MASK(48)));
+            }
+        }
         hash_table_i_t *next = hti->next;
         nbd_free(hti);
         hti = next;

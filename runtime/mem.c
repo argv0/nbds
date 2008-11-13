@@ -62,6 +62,7 @@ void mem_init (void) {
 //
 // TODO: maybe we want to munmap() larger size blocks to reclaim virtual address space?
 void nbd_free (void *x) {
+    assert(x);
     LOCALIZE_THREAD_LOCAL(tid_, int);
     block_t  *b = (block_t *)x;
     assert(((size_t)b >> REGION_SCALE) < ((1 << HEADER_REGION_SCALE) / sizeof(header_t)));
@@ -88,6 +89,7 @@ void nbd_free (void *x) {
 // on the private free list. If we didn't find any blocks on the public free lists, allocate a new
 // region, break it up into blocks and put them on the private free list.
 void *nbd_malloc (size_t n) {
+    assert(n);
     LOCALIZE_THREAD_LOCAL(tid_, int);
     if (n < sizeof(block_t)) {
         n = sizeof(block_t);

@@ -93,7 +93,7 @@ void *simple_worker (void *arg) {
     hash_table_t *ht = wd->ht;
     CuTest* tc = wd->tc;
     uint64_t d = wd->id;
-    int iters = 20000;
+    int iters = 1000000;
 
     SYNC_ADD(wd->wait, -1);
     do { } while (*((volatile worker_data_t *)wd)->wait); // wait for all workers to be ready
