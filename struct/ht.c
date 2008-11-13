@@ -25,6 +25,8 @@
 #define MIN_SCALE               (__builtin_ctz(ENTRIES_PER_BUCKET) + 2) // min 4 buckets
 #define MAX_BUCKETS_TO_PROBE    250
 
+#define GET_PTR(x) (string_t *)((x) & MASK(48)) // low-order 48 bits is a pointer to a string_t
+
 typedef struct ht_entry {
     uint64_t key;
     uint64_t value;
@@ -65,7 +67,7 @@ static inline int get_next_ndx(int old_ndx, uint32_t key_hash, int ht_scale) {
 static inline int ht_key_equals (uint64_t a, uint32_t b_hash, const char *b_value, uint32_t b_len) {
     if ((b_hash >> 16) != (a >> 48)) // high-order 16 bits are from the hash value
         return FALSE;
-    const string_t *a_key = (string_t *)(a & MASK(48)); // low-order 48 bits is a pointer 
+    const string_t *a_key = GET_PTR(a); 
     assert(a_key);
     return a_key->len == b_len && memcmp(a_key->val, b_value, b_len) == 0;
 }
@@ -105,8 +107,7 @@ static volatile entry_t *hti_lookup (hash_table_i_t *hti, uint32_t key_hash, con
 
             if (ht_key_equals(e_key, key_hash, key_val, key_len)) {
                 TRACE("h0", "hti_lookup: entry %p found on probe %d", e, i*ENTRIES_PER_BUCKET+j+1);
-                TRACE("h0", "hti_lookup: with key \"%s\" value %p", 
-                            ((string_t *)(e_key & MASK(48)))->val, e->value);
+                TRACE("h0", "hti_lookup: with key \"%s\" value %p", GET_PTR(e_key)->val, e->value);
                 return e;
             }
         }
@@ -217,13 +218,13 @@ static int hti_copy_entry (hash_table_i_t *ht1, volatile entry_t *ht1_e, uint32_
     // be freed.
     assert(COPIED_VALUE == TAG_VALUE(TOMBSTONE));
     if (ht1_e_value == TOMBSTONE) {
-        nbd_defer_free((string_t *)(ht1_e->key & MASK(48)));
+        nbd_defer_free(GET_PTR(ht1_e->key));
         return TRUE; 
     }
 
     // Install the key in the new table.
     uint64_t key = ht1_e->key;
-    string_t *key_string = (string_t *)(key & MASK(48));
+    string_t *key_string = GET_PTR(key);
     uint64_t value = STRIP_TAG(ht1_e_value);
     TRACE("h0", "hti_copy_entry: key %p is %s", key, key_string->val);
 
@@ -328,7 +329,7 @@ static uint64_t hti_compare_and_set (hash_table_i_t *hti, uint32_t key_hash, con
 
         // Retry if another thread stole the entry out from under us.
         if (e_key != DOES_NOT_EXIST) {
-            TRACE("h0", "hti_compare_and_set: key in entry %p is \"%s\"", e, e_key & MASK(48));
+            TRACE("h0", "hti_compare_and_set: key in entry %p is \"%s\"", e, GET_PTR(e_key)->val);
             TRACE("h0", "hti_compare_and_set: lost race to install key \"%s\" in %p", key->val, e);
             nbd_free(key);
             return hti_compare_and_set(hti, key_hash, key_val, key_len, expected, new); // tail-call
@@ -520,7 +521,7 @@ void ht_free (hash_table_t *ht) {
         for (uint32_t i = 0; i < (1 << hti->scale); ++i) {
             assert(hti->table[i].value == COPIED_VALUE || !IS_TAGGED(hti->table[i].value));
             if (hti->table[i].key != DOES_NOT_EXIST) {
-                nbd_free((void *)(hti->table[i].key & MASK(48)));
+                nbd_free(GET_PTR(hti->table[i].key));
             }
         }
         hash_table_i_t *next = hti->next;

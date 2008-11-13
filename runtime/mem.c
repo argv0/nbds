@@ -113,9 +113,9 @@ void *nbd_malloc (size_t n) {
                 uint32_t count = pri->count;
                 pri->count = 0;
                 // If our private list is empty and we haven't gotten at least half a region's worth 
-                // of block's from our public lists, we break open a new region. This guarentees 
-                // that we are amortizing the cost of accessing our public lists accross enough 
-                // nbd_malloc() calls.
+                // of block's from our public lists, we allocate a new region. This guarentees that
+                // we amortize the cost of accessing our public lists accross enough nbd_malloc() 
+                // calls.
                 uint32_t min_count = b_scale > REGION_SCALE ? 1 << (b_scale-REGION_SCALE-1) : 1;
                 if (count < min_count) {
                     char  *region = get_new_region(b_scale);
