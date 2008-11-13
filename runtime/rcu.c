@@ -2,7 +2,9 @@
  * Written by Josh Dybnis and released to the public domain, as explained at
  * http://creativecommons.org/licenses/publicdomain
  *
- * safe memory reclemation using a simple technique from rcu
+ * safe memory reclamation using a simple technique from rcu
+ *
+ * WARNING: not robust enough for real-world use
  */
 #include <string.h>
 #include "common.h"

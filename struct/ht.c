@@ -426,35 +426,46 @@ uint64_t ht_compare_and_set (hash_table_t *ht, const char *key_val, uint32_t key
 
     // Help with an ongoing copy.
     if (EXPECT_FALSE(hti->next != NULL)) {
-
-        // Reserve some entries for this thread to copy. There is a race condition here because the
-        // fetch and add isn't atomic, but that is ok.
+        volatile entry_t *e;
+        uint64_t limit; 
+        int num_copied = 0;
         int x = hti->scan; 
-        hti->scan = x + ENTRIES_PER_COPY_CHUNK; 
 
-        // <hti->scan> might be larger than the size of the table, if some thread stalls while 
-        // copying. In that case we just wrap around to the begining and make another pass through
-        // the table.
-        volatile entry_t *e = hti->table + (x & MASK(hti->scale));
+        // Panic if we've been around the array twice and still haven't finished the copy.
+        int panic = (x >= (1 << (hti->scale + 1))); 
+        if (!panic) {
+            limit = ENTRIES_PER_COPY_CHUNK;
+
+            // Reserve some entries for this thread to copy. There is a race condition here because the
+            // fetch and add isn't atomic, but that is ok.
+            hti->scan = x + ENTRIES_PER_COPY_CHUNK; 
+
+            // <hti->scan> might be larger than the size of the table, if some thread stalls while 
+            // copying. In that case we just wrap around to the begining and make another pass through
+            // the table.
+            e = hti->table + (x & MASK(hti->scale));
+        } else {
+            // scan the whole table
+            limit = (1 << hti->scale);
+            e = hti->table;
+        }
 
         // Copy the entries
-        int num_copied = 0, i;
-        for (i = 0; i < ENTRIES_PER_COPY_CHUNK; ++i) {
+        for (int i = 0; i < limit; ++i) {
             num_copied += hti_copy_entry(hti, e++, 0, hti->next);
             assert(e <= hti->table + (1 << hti->scale));
         }
         if (num_copied != 0) {
             SYNC_ADD(&hti->num_entries_copied, num_copied);
         }
-    }
 
-    // Dispose of fully copied tables.
-    while (hti->num_entries_copied == (1 << hti->scale)) {
-        assert(hti->next);
-        if (SYNC_CAS(ht, hti, hti->next) == hti) {
-            nbd_defer_free(hti); 
+        // Dispose of fully copied tables.
+        if (hti->num_entries_copied == (1 << hti->scale) || panic) {
+            assert(hti->next);
+            if (SYNC_CAS(ht, hti, hti->next) == hti) {
+                nbd_defer_free(hti); 
+            }
         }
-        hti = *ht;
     }
 
     uint64_t old_val;
