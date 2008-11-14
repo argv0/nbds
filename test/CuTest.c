@@ -140,6 +140,10 @@ static void CuFailInternal(CuTest* tc, const char* file, int line, CuString* str
 
 	tc->failed = 1;
 	tc->message = string->buffer;
+#ifdef ENABLE_TRACE
+    extern void lwt_dump(const char *);
+    lwt_dump(tc->name);
+#endif
 	if (tc->jumpBuf != 0) longjmp(*(tc->jumpBuf), 0);
 }
 

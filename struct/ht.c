@@ -25,7 +25,7 @@
 #define MIN_SCALE               (__builtin_ctz(ENTRIES_PER_BUCKET) + 2) // min 4 buckets
 #define MAX_BUCKETS_TO_PROBE    250
 
-#define GET_PTR(x) (string_t *)((x) & MASK(48)) // low-order 48 bits is a pointer to a string_t
+#define GET_PTR(x) ((string_t *)((x) & MASK(48))) // low-order 48 bits is a pointer to a string_t
 
 typedef struct ht_entry {
     uint64_t key;
@@ -81,33 +81,31 @@ static inline int ht_key_equals (uint64_t a, uint32_t b_hash, const char *b_valu
 // Record if the entry being returned is empty. Otherwise the caller will have to waste time with
 // ht_key_equals() to confirm that it did not lose a race to fill an empty entry.
 static volatile entry_t *hti_lookup (hash_table_i_t *hti, uint32_t key_hash, const char *key_val, uint32_t key_len, int *is_empty) {
-    TRACE("h0", "hti_lookup(key \"%s\" in hti %p)", key_val, hti);
+    TRACE("h0", "hti_lookup(key %p in hti %p)", key_val, hti);
     *is_empty = 0;
 
     // Probe one cache line at a time
     int ndx = key_hash & MASK(hti->scale); // the first entry to search
-    int i;
-    for (i = 0; i < hti->max_probe; ++i) {
+    for (int i = 0; i < hti->max_probe; ++i) {
 
         // The start of the bucket is the first entry in the cache line.
         volatile entry_t *bucket = hti->table + (ndx & ~(ENTRIES_PER_BUCKET-1)); 
 
         // Start searching at the indexed entry. Then loop around to the begining of the cache line.
-        int j;
-        for (j = 0; j < ENTRIES_PER_BUCKET; ++j) {
+        for (int j = 0; j < ENTRIES_PER_BUCKET; ++j) {
             volatile entry_t *e = bucket + ((ndx + j) & (ENTRIES_PER_BUCKET-1));
 
             uint64_t e_key = e->key;
             if (e_key == DOES_NOT_EXIST) {
-                TRACE("h0", "hti_lookup: empty entry %p found on probe %d", e, i*ENTRIES_PER_BUCKET+j+1);
-                // we tag the pointer so the caller can avoid an expensive ht_key_equals()
-                *is_empty = 1;
+                TRACE("h0", "hti_lookup: empty entry %p found", e, 0);
+                *is_empty = 1; // indicate an empty so the caller avoids an expensive ht_key_equals
                 return e;
             }
 
             if (ht_key_equals(e_key, key_hash, key_val, key_len)) {
-                TRACE("h0", "hti_lookup: entry %p found on probe %d", e, i*ENTRIES_PER_BUCKET+j+1);
-                TRACE("h0", "hti_lookup: with key \"%s\" value %p", GET_PTR(e_key)->val, e->value);
+                TRACE("h0", "hti_lookup: entry %p found value %p", e, e->value);
+                TRACE("h0", "hti_lookup: entry key %p len %llu", GET_PTR(e_key)->val, 
+                                                                 GET_PTR(e_key)->len);
                 return e;
             }
         }
@@ -153,9 +151,7 @@ static hash_table_i_t *hti_alloc (hash_table_t *parent, int scale) {
 //
 // Initiates a copy by creating a larger hash_table_i_t and installing it in <hti->next>.
 static void hti_start_copy (hash_table_i_t *hti) {
-    TRACE("h0", "hti_start_copy(hti %p hti->next %p)", hti, hti->next);
-    if (hti->next) 
-        return; // another thread beat us to it
+    TRACE("h0", "hti_start_copy(hti %p scale %llu)", hti, hti->scale);
 
     // heuristics to determine the size of the new table
     uint64_t count = ht_count(hti->ht);
@@ -164,7 +160,8 @@ static void hti_start_copy (hash_table_i_t *hti) {
     new_scale += (count > (1 << (new_scale - 2))); // double size again if more than 1/2 full
 
     // Allocate the new table and attempt to install it.
-    hash_table_i_t *next = hti_alloc(hti->ht, hti->scale + 1);
+    hash_table_i_t *next = hti_alloc(hti->ht, new_scale);
+    TRACE("h0", "hti_start_copy: new hti %p scale %llu", next->scale, next->scale);
     hash_table_i_t *old_next = SYNC_CAS(&hti->next, NULL, next);
     if (old_next != NULL) {
         TRACE("h0", "hti_start_copy: lost race to install new hti; found %p", old_next, 0);
@@ -226,7 +223,7 @@ static int hti_copy_entry (hash_table_i_t *ht1, volatile entry_t *ht1_e, uint32_
     uint64_t key = ht1_e->key;
     string_t *key_string = GET_PTR(key);
     uint64_t value = STRIP_TAG(ht1_e_value);
-    TRACE("h0", "hti_copy_entry: key %p is %s", key, key_string->val);
+    TRACE("h0", "hti_copy_entry: key %p value %p", key, value);
 
     // We use 0 to indicate that <key_hash> isn't initiallized. Occasionally the <key_hash> will
     // really be 0 and we will waste time recomputing it. That is rare enough that it is OK. 
@@ -239,7 +236,9 @@ static int hti_copy_entry (hash_table_i_t *ht1, volatile entry_t *ht1_e, uint32_
 
     // it is possible that there is not any room in the new table either
     if (EXPECT_FALSE(ht2_e == NULL)) {
-        hti_start_copy(ht2); // initiate nested copy, if not already started
+        if (ht2->next == NULL) {
+            hti_start_copy(ht2); // initiate nested copy, if not already started
+        }
         return hti_copy_entry(ht1, ht1_e, key_hash, ht2->next); // recursive tail-call
     }
 
@@ -253,7 +252,7 @@ static int hti_copy_entry (hash_table_i_t *ht1, volatile entry_t *ht1_e, uint32_
         }
     }
     assert(ht_key_equals(ht2_e->key, key_hash, key_string->val, key_string->len));
-    TRACE("h0", "hti_copy_entry: key %p installed in new old hti %p", key_string->val, ht2);
+    TRACE("h0", "hti_copy_entry: key %p installed in new hti %p", key_string->val, ht2);
 
     // Copy the value to the entry in the new table.
     uint64_t old_ht2_e_value = SYNC_CAS(&ht2_e->value, DOES_NOT_EXIST, value);
@@ -294,8 +293,8 @@ static int hti_copy_entry (hash_table_i_t *ht1, volatile entry_t *ht1_e, uint32_
 //
 static uint64_t hti_compare_and_set (hash_table_i_t *hti, uint32_t key_hash, const char *key_val, 
                                     uint32_t key_len, uint64_t expected, uint64_t new) {
-    TRACE("h0", "hti_compare_and_set(hti %p key \"%s\")", hti, key_val);
-    TRACE("h0", "hti_compare_and_set(new value %p; caller expects value %p)", new, expected);
+    TRACE("h0", "hti_compare_and_set: hti %p key %p", hti, key_val);
+    TRACE("h0", "hti_compare_and_set: new value %p expected old value %p", new, expected);
     assert(hti);
     assert(new != DOES_NOT_EXIST && !IS_TAGGED(new));
     assert(key_val);
@@ -305,7 +304,9 @@ static uint64_t hti_compare_and_set (hash_table_i_t *hti, uint32_t key_hash, con
 
     // There is no room for <key>, grow the table and try again.
     if (e == NULL) {
-        hti_start_copy(hti);
+        if (hti->next == NULL) {
+            hti_start_copy(hti);
+        }
         return COPIED_VALUE;
     }
 
@@ -319,22 +320,23 @@ static uint64_t hti_compare_and_set (hash_table_i_t *hti, uint32_t key_hash, con
         if (new == TOMBSTONE)
             return DOES_NOT_EXIST;
 
-        // allocate <key>.
+        // Allocate <key>.
         string_t *key = nbd_malloc(sizeof(uint32_t) + key_len);
         key->len = key_len;
         memcpy(key->val, key_val, key_len);
 
-        // CAS <key> into the table. 
-        uint64_t e_key = SYNC_CAS(&e->key, DOES_NOT_EXIST, ((uint64_t)(key_hash >> 16) << 48) | (uint64_t)key);
+        // Combine <key> pointer with bits from its hash, CAS it into the table. 
+        uint64_t temp = ((uint64_t)(key_hash >> 16) << 48) | (uint64_t)key; 
+        uint64_t e_key = SYNC_CAS(&e->key, DOES_NOT_EXIST, temp);
 
         // Retry if another thread stole the entry out from under us.
         if (e_key != DOES_NOT_EXIST) {
-            TRACE("h0", "hti_compare_and_set: key in entry %p is \"%s\"", e, GET_PTR(e_key)->val);
-            TRACE("h0", "hti_compare_and_set: lost race to install key \"%s\" in %p", key->val, e);
+            TRACE("h0", "hti_compare_and_set: lost race to install key %p in entry %p", key, e);
+            TRACE("h0", "hti_compare_and_set: found %p instead of NULL", GET_PTR(e_key), 0);
             nbd_free(key);
             return hti_compare_and_set(hti, key_hash, key_val, key_len, expected, new); // tail-call
         }
-        TRACE("h0", "hti_compare_and_set: installed key \"%s\" in entry %p", key_val, e);
+        TRACE("h0", "hti_compare_and_set: installed key %p in entry %p", key, e);
     }
 
     // If the entry is in the middle of a copy, the copy must be completed first.
@@ -352,8 +354,8 @@ static uint64_t hti_compare_and_set (hash_table_i_t *hti, uint32_t key_hash, con
     int old_existed = (e_value != TOMBSTONE && e_value != DOES_NOT_EXIST);
     if (EXPECT_FALSE(expected != HT_EXPECT_WHATEVER && expected != e_value)) {
         if (EXPECT_FALSE(expected != (old_existed ? HT_EXPECT_EXISTS : HT_EXPECT_NOT_EXISTS))) {
-            TRACE("h0", "hti_compare_and_set: value expected by caller for key \"%s\" not found; "
-                        "found value %p", key_val, e_value);
+            TRACE("h0", "hti_compare_and_set: value %p expected by caller not found; found value %p",
+                        expected, e_value);
             return e_value;
         }
     }
@@ -420,6 +422,8 @@ uint64_t ht_get (hash_table_t *ht, const char *key_val, uint32_t key_len) {
 uint64_t ht_compare_and_set (hash_table_t *ht, const char *key_val, uint32_t key_len, 
                             uint64_t expected_val, uint64_t new_val) {
 
+    TRACE("h0", "ht_compare_and_set: key %p len %u", key_val, key_len);
+    TRACE("h0", "ht_compare_and_set: expected val %p new val %p", expected_val, new_val);
     assert(key_val);
     assert(!IS_TAGGED(new_val) && new_val != DOES_NOT_EXIST);
 
@@ -432,6 +436,7 @@ uint64_t ht_compare_and_set (hash_table_t *ht, const char *key_val, uint32_t key
         int num_copied = 0;
         int x = hti->scan; 
 
+        TRACE("h0", "ht_compare_and_set: help copy. scan is %llu, size is %llu", x, 1<<hti->scale);
         // Panic if we've been around the array twice and still haven't finished the copy.
         int panic = (x >= (1 << (hti->scale + 1))); 
         if (!panic) {
@@ -446,6 +451,7 @@ uint64_t ht_compare_and_set (hash_table_t *ht, const char *key_val, uint32_t key
             // the table.
             e = hti->table + (x & MASK(hti->scale));
         } else {
+            TRACE("h0", "ht_compare_and_set: help copy panic", 0, 0);
             // scan the whole table
             limit = (1 << hti->scale);
             e = hti->table;

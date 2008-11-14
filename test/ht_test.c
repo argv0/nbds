@@ -9,6 +9,7 @@
 #include "common.h"
 #include "ht.h"
 #include "mem.h"
+#include "lwt.h"
 
 #define ASSERT_EQUAL(x, y) CuAssertIntEquals(tc, x, y)
 
@@ -98,17 +99,18 @@ void *simple_worker (void *arg) {
     SYNC_ADD(wd->wait, -1);
     do { } while (*((volatile worker_data_t *)wd)->wait); // wait for all workers to be ready
 
-    int i, j;
-    for (j = 0; j < 10; ++j) {
-        for (i = d; i < iters; i+=2) {
-            char key[8];
+    for (int j = 0; j < 10; ++j) {
+        for (int i = d; i < iters; i+=2) {
+            char key[10];
             sprintf(key, "k%u", i); 
-            ASSERT_EQUAL( DOES_NOT_EXIST, ht_add(ht, key, strlen(key)+1, d+1) );
+            TRACE("t0", "test ht_add() iteration (%llu, %llu)", j, i);
+            CuAssertIntEquals_Msg(tc, key, DOES_NOT_EXIST, ht_add(ht, key, strlen(key)+1, d+1) );
         }
-        for (i = d; i < iters; i+=2) {
-            char key[8];
+        for (int i = d; i < iters; i+=2) {
+            char key[10];
             sprintf(key, "k%u", i); 
-            ASSERT_EQUAL( d+1, ht_remove(ht, key, strlen(key)+1) );
+            TRACE("t0", "test ht_remove() iteration (%llu, %llu)", j, i);
+            CuAssertIntEquals_Msg(tc, key, d+1, ht_remove(ht, key, strlen(key)+1) );
         }
         rcu_update();
     }
@@ -159,7 +161,7 @@ void concurrent_insert (CuTest* tc) {
 int main (void) {
 
     nbd_init();
-    //lwt_set_trace_level("h4");
+    lwt_set_trace_level("h4t9");
 
     // Create and run test suite
 	CuString *output = CuStringNew();

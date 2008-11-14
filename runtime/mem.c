@@ -98,7 +98,7 @@ void *nbd_malloc (size_t n) {
     assert(b_scale <= MAX_SCALE);
     TRACE("m0", "nbd_malloc(): size %llu scale %llu", n, b_scale);
     private_list_t *pri = &pri_free_list_[tid_][b_scale]; // our private free list
-    TRACE("m0", "nbd_malloc(): private free list %p first block %p", pri->list, pri->head);
+    TRACE("m0", "nbd_malloc(): private free list first block %p", pri->head, 0);
 
     // If our private free list is empty, try to find blocks on our public free list. If that fails,
     // allocate a new region.
@@ -133,7 +133,7 @@ void *nbd_malloc (size_t n) {
 
             if (pubs[pri->next_pub] != NULL) {
                 block_t *stolen = SYNC_SWAP(&pubs[pri->next_pub], NULL);
-                TRACE("m0", "nbd_malloc(): stole list %p first block %p", stolen);
+                TRACE("m0", "nbd_malloc(): stole list %p", stolen, 0);
                 if (stolen == NULL)
                     continue;
                 pri->head = stolen;
@@ -145,7 +145,7 @@ void *nbd_malloc (size_t n) {
 
     // Pull a block off of our private free list.
     block_t *b = pri->head;
-    TRACE("m0", "nbd_malloc(): take block %p off of of private list (new head is %p)", b, pri->next);
+    TRACE("m0", "nbd_malloc(): take block %p off of of private list (new head is %p)", b, b->next);
     assert(b);
     pri->head = b->next;
     pri->count++;

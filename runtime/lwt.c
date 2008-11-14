@@ -14,6 +14,8 @@
 #define LWT_BUFFER_SIZE (1 << LWT_BUFFER_SCALE)
 #define LWT_BUFFER_MASK (LWT_BUFFER_SIZE - 1)
 
+volatile int halt_ = 0;
+
 typedef struct lwt_record {
     uint64_t timestamp;
     const char *format;
@@ -58,7 +60,7 @@ static inline void dump_record (FILE *file, int thread_id, lwt_record_t *r, uint
     if (f != NULL && level <= f[1]) {
         char s[3] = {flag, level, '\0'};
         fprintf(file, "%09llu %d %s ", ((uint64_t)r->timestamp - offset) >> 6, thread_id, s);
-        const char *format = (const char *)(((uint64_t)r->format << 16) >> 16); // strip out the embedded flags
+        const char *format = (const char *)((size_t)r->format & MASK(48)); // strip out the embedded flags
         fprintf(file, format, r->value1, r->value2);
         fprintf(file, "\n");
     }
@@ -81,6 +83,7 @@ static void dump_buffer (FILE *file, int thread_id, uint64_t offset)
 
 void lwt_dump (const char *file_name)
 {
+    halt_ = 1;
     uint64_t offset = (uint64_t)-1;
 
     for (int i = 0; i < MAX_NUM_THREADS; ++i) {
@@ -113,6 +116,8 @@ void lwt_dump (const char *file_name)
 }
 
 void lwt_trace_i (const char *format, size_t value1, size_t value2) {
+    if (*(volatile int *)&halt_)
+        return;
     LOCALIZE_THREAD_LOCAL(tid_, int);
     lwt_buffer_t *tb = lwt_buf_[tid_];
     if (tb != NULL) {
