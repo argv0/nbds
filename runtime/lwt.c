@@ -29,7 +29,7 @@ typedef struct lwt_buffer {
 } lwt_buffer_t;
 
 lwt_buffer_t *lwt_buf_[MAX_NUM_THREADS] = {};
-uint64_t flag_mask_ = 0;
+char flag_state_[256] = {};
 static const char *flags_ = "";
 
 void lwt_thread_init (int thread_id)
@@ -45,9 +45,9 @@ void lwt_set_trace_level (const char *flags)
 {
     assert(strlen(flags) % 2 == 0); // a well formed <flags> should be an even number of characters long
     flags_ = flags;
-    int i;
-    for (i = 0; flags[i]; i+=2) {
-        flag_mask_ |= 1 << (flags[i] - 'A');
+    memset(flag_state_, 0, sizeof(flag_state_));
+    for (int i = 0; flags[i]; i+=2) {
+        flag_state_[(unsigned)flags[i]] = flags[i+1];
     }
 }
 
@@ -56,8 +56,7 @@ static inline void dump_record (FILE *file, int thread_id, lwt_record_t *r, uint
     // print the record if its trace category is enabled at a high enough level
     int flag  =  (size_t)r->format >> 56;
     int level = ((size_t)r->format >> 48) & 0xFF;
-    const char *f = strchr(flags_, flag);
-    if (f != NULL && level <= f[1]) {
+    if (flag_state_[(unsigned)flag] >= level) {
         char s[3] = {flag, level, '\0'};
         fprintf(file, "%09llu %d %s ", ((uint64_t)r->timestamp - offset) >> 6, thread_id, s);
         const char *format = (const char *)((size_t)r->format & MASK(48)); // strip out the embedded flags

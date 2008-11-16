@@ -35,7 +35,7 @@
 #define MASK(n)     ((1LL << (n)) - 1)
 
 #define TAG          (1LL << 63)
-#define IS_TAGGED(v) ((uint64_t)(v) < 0)
+#define IS_TAGGED(v) ((int64_t)(v) < 0)
 #define TAG_VALUE(v) ((uint64_t)(v) |  TAG)
 #define STRIP_TAG(v) ((uint64_t)(v) & ~TAG)
 

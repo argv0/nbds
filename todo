@@ -2,4 +2,4 @@
 - fix makefile to compute dependency info as a side-effect of compilation (-MF)
 - investigate 16 byte CAS; ht can store GUIDs inline instead of pointers to actual keys 
 - test ht
-- optimize tracing code, still too much overhead
++ optimize tracing code, still too much overhead

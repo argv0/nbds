@@ -161,7 +161,7 @@ void concurrent_insert (CuTest* tc) {
 int main (void) {
 
     nbd_init();
-    lwt_set_trace_level("h4t9");
+    //lwt_set_trace_level("h0");
 
     // Create and run test suite
 	CuString *output = CuStringNew();
