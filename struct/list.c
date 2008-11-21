@@ -7,78 +7,84 @@
  */
 #include <stdio.h>
 #include <string.h>
-#include <sys/time.h>
 
 #include "common.h"
-#include "lwt.h"
+#include "struct.h"
 #include "mem.h"
 
-#define NUM_ITERATIONS 10000000
-
-#define PLACE_MARK(x) (((size_t)(x))|1)
-#define CLEAR_MARK(x) (((size_t)(x))&~(size_t)1)
-#define IS_MARKED(x)  ((size_t)(x))&1
-
 typedef struct node {
+    uint64_t key;
+    uint64_t value;
     struct node *next;
-    int key;
 } node_t;
 
 typedef struct list {
-    node_t head[1];
-    node_t last;
+    node_t *head;
+    node_t *last;
 } list_t;
 
-static void list_node_init (node_t *item, int key) {
-    memset(item, 0, sizeof(node_t));
-    item->key = key;
-}
-
-node_t *list_node_alloc (int key) {
+node_t *node_alloc (uint64_t key, uint64_t value) {
     node_t *item = (node_t *)nbd_malloc(sizeof(node_t));
-    list_node_init(item, key);
+    memset(item, 0, sizeof(node_t));
+    item->key   = key;
+    item->value = value;
     return item;
 }
 
 list_t *list_alloc (void) {
     list_t *list = (list_t *)nbd_malloc(sizeof(list_t));
-    list_node_init(list->head, INT_MIN);
-    list_node_init(&list->last, INT_MAX);
-    list->head->next = &list->last;
+    list->head = node_alloc(0, 0);
+    list->last = node_alloc((uint64_t)-1, 0);
+    list->head->next = list->last;
     return list;
 }
 
-static void find_pred_and_item (node_t **pred_ptr, node_t **item_ptr, list_t *list, int key) {
+static node_t *find_pred (node_t **pred_ptr, list_t *list, uint64_t key, int help_remove) {
     node_t *pred = list->head;
-    node_t *item = list->head->next; // head is never removed
-    TRACE("l3", "find_pred_and_item: searching for key %llu in list (head is %p)", key, pred);
+    node_t *item = pred->next;
+    TRACE("l3", "find_pred: searching for key %p in list (head is %p)", key, pred);
 #ifndef NDEBUG
     int count = 0;
 #endif
+
     do {
-        // skip removed items
-        node_t *other, *next = item->next;
-        TRACE("l3", "find_pred_and_item: visiting item %p (next is %p)", item, next);
-        while (EXPECT_FALSE(IS_MARKED(next))) {
-            
-            // assist in unlinking partially removed items
-            if ((other = SYNC_CAS(&pred->next, item, CLEAR_MARK(next))) != item)
-            {
-                TRACE("l3", "find_pred_and_item: failed to unlink item from pred %p, pred's next pointer was changed to %p", pred, other);
-                return find_pred_and_item(pred_ptr, item_ptr, list, key); // retry
+        node_t *next = item->next;
+        TRACE("l3", "find_pred: visiting item %p (next %p)", item, next);
+        TRACE("l3", "find_pred: key %p value %p", item->key, item->value);
+
+        // Marked items are partially removed.
+        while (EXPECT_FALSE(IS_TAGGED(next))) {
+
+            // Skip over partially removed items.
+            if (!help_remove) {
+                item = (node_t *)STRIP_TAG(item->next);
+                next = item->next;
+                continue;
             }
 
-            assert(count++ < 18);
-            item = (node_t *)CLEAR_MARK(next);
-            next = item->next;
-            TRACE("l3", "find_pred_and_item: unlinked item, %p is the new item (next is %p)", item, next);
+            // Unlink partially removed items.
+            node_t *other;
+            if ((other = SYNC_CAS(&pred->next, item, STRIP_TAG(next))) == item) {
+                item = (node_t *)STRIP_TAG(next);
+                next = item->next;
+                TRACE("l3", "find_pred: unlinked item; %p is the new item (next is %p)", item, next);
+                nbd_defer_free(other);
+            } else {
+                TRACE("l3", "find_pred: lost race to unlink item from pred %p; its link changed to %p", pred, other);
+                if (IS_TAGGED(other))
+                    return find_pred(pred_ptr, list, key, help_remove); // retry
+                item = other;
+                next = item->next;
+            }
         }
 
+        // If we reached the key (or passed where it should be), we found the right predesssor
         if (item->key >= key) {
-            *pred_ptr = pred;
-            *item_ptr = item;
-            TRACE("l3", "find_pred_and_item: key found, returning pred %p and item %p", pred, item);
-            return;
+            TRACE("l3", "find_pred: returning pred %p and item %p", pred, item);
+            if (pred_ptr != NULL) {
+                *pred_ptr = pred;
+            }
+            return item;
         }
 
         assert(count++ < 18);
@@ -88,77 +94,86 @@ static void find_pred_and_item (node_t **pred_ptr, node_t **item_ptr, list_t *li
     } while (1);
 }
 
-int list_insert (list_t *list, node_t *item) {
-    TRACE("l3", "list_insert: inserting %p (with key %llu)", item, item->key);
-    node_t *pred, *next, *other = (node_t *)-1;
-    do {
-        if (other != (node_t *)-1) {
-            TRACE("l3", "list_insert: failed to swap item into list; pred's next was changed to %p", other, 0);
-        }
-        find_pred_and_item(&pred, &next, list, item->key);
+// Fast find. Do not help unlink partially removed nodes and do not return the found item's predecessor.
+uint64_t list_lookup (list_t *list, uint64_t key) {
+    TRACE("l3", "list_lookup: searching for key %p in list %p", key, list);
+    node_t *item = find_pred(NULL, list, key, FALSE);
 
-        // fail if item already exists in list
-        if (next->key == item->key)
-        {
-            TRACE("l3", "list_insert: insert failed item with key already exists %p", next, 0);
-            return 0;
-        }
-
-        item->next = next;
-        TRACE("l3", "list_insert: attempting to insert item between %p and %p", pred, next);
-
-    } while ((other = __sync_val_compare_and_swap(&pred->next, next, item)) != next);
-
-    TRACE("l3", "list_insert: insert was successful", 0, 0);
-
-    // success
-    return 1;
+    // If we found an <item> matching the <key> return its value.
+    return (item->key == key) ? item->value : DOES_NOT_EXIST;
 }
 
-node_t *list_remove (list_t *list, int key) {
-    node_t *pred, *item, *next;
+// Insert the <key>, if it doesn't already exist in the <list>
+uint64_t list_add (list_t *list, uint64_t key, uint64_t value) {
+    TRACE("l3", "list_add: inserting key %p value %p", key, value);
+    node_t *pred;
+    node_t *item = NULL;
+    do {
+        node_t *next = find_pred(&pred, list, key, TRUE);
 
-    TRACE("l3", "list_remove: removing item with key %llu", key, 0);
-    find_pred_and_item(&pred, &item, list, key);
-    if (item->key != key)
-    {
-        TRACE("l3", "list_remove: remove failed, key does not exist in list", 0, 0);
-        return NULL;
-    }
-
-    // Mark <item> removed, must be atomic. If multiple threads try to remove the 
-    // same item only one of them should succeed
-    next = item->next;
-    node_t *other = (node_t *)-1;
-    if (IS_MARKED(next) || (other = __sync_val_compare_and_swap(&item->next, next, PLACE_MARK(next))) != next) {
-        if (other == (node_t *)-1) {
-            TRACE("l3", "list_remove: retry; %p is already marked for removal (it's next pointer is %p)", item, next);
-        } else {
-            TRACE("l3", "list_remove: retry; failed to mark %p for removal; it's next pointer was %p, but changed to %p", next, other);
+        // If a node matching <key> already exists in the list, return its value.
+        if (next->key == key) {
+            TRACE("l3", "list_add: there is already an item %p (value %p) with the same key", next, next->value);
+            if (EXPECT_FALSE(item != NULL)) { nbd_free(item); }
+            return next->value;
         }
-        return list_remove(list, key); // retry
+
+        TRACE("l3", "list_add: attempting to insert item between %p and %p", pred, next);
+        if (EXPECT_TRUE(item == NULL)) { item = node_alloc(key, value); }
+        item->next = next;
+        node_t *other = SYNC_CAS(&pred->next, next, item);
+        if (other == next) {
+            TRACE("l3", "list_add: insert was successful", 0, 0);
+            return DOES_NOT_EXIST; // success
+        }
+        TRACE("l3", "list_add: failed to change pred's link: expected %p found %p", next, other);
+
+    } while (1);
+}
+
+uint64_t list_remove (list_t *list, uint64_t key) {
+    TRACE("l3", "list_remove: removing item with key %p from list %p", key, list);
+    node_t *pred;
+    node_t *item = find_pred(&pred, list, key, TRUE);
+    if (item->key != key) {
+        TRACE("l3", "list_remove: remove failed, an item with a matching key does not exist in the list", 0, 0);
+        return DOES_NOT_EXIST;
     }
 
-    // Remove <item> from list
+    // Mark <item> removed. This must be atomic. If multiple threads try to remove the same item
+    // only one of them should succeed.
+    if (EXPECT_FALSE(IS_TAGGED(item->next))) {
+        TRACE("l3", "list_remove: %p is already marked for removal by another thread", item, 0);
+        return DOES_NOT_EXIST;
+    }
+    node_t *next = SYNC_FETCH_AND_OR(&item->next, TAG);
+    if (EXPECT_FALSE(IS_TAGGED(next))) {
+        TRACE("l3", "list_remove: lost race -- %p is already marked for removal by another thread", item, 0);
+        return DOES_NOT_EXIST;
+    }
+
+    uint64_t value = item->value;
+
+    // Unlink <item> from the list.
     TRACE("l3", "list_remove: link item's pred %p to it's successor %p", pred, next);
-    if ((other = __sync_val_compare_and_swap(&pred->next, item, next)) != item) {
-        TRACE("l3", "list_remove: link failed; pred's link changed from %p to %p", item, other);
+    node_t *other;
+    if ((other = SYNC_CAS(&pred->next, item, next)) != item) {
+        TRACE("l3", "list_remove: unlink failed; pred's link changed from %p to %p", item, other);
+        // By being marked, the item was logically removed. It is safe to leave it for
+        // another thread to finish physically removing it from the skiplist.
+        return value;
+    } 
 
-        // make sure item gets unlinked before returning it
-        node_t *d1, *d2;
-        find_pred_and_item(&d1, &d2, list, key);
-    } else {
-        TRACE("l3", "list_remove: link succeeded; pred's link changed from %p to %p", item, next);
-    }
-
-    return item;
+    // The thread that completes the unlink should free the memory.
+    nbd_defer_free(item); 
+    return value;
 }
 
 void list_print (list_t *list) {
     node_t *item;
     item = list->head;
     while (item) {
-        printf("%d ", item->key);
+        printf("0x%llx ", item->key);
         fflush(stdout);
         item = item->next;
     }
@@ -168,7 +183,11 @@ void list_print (list_t *list) {
 #ifdef MAKE_list_test
 #include <errno.h>
 #include <pthread.h>
+#include <sys/time.h>
+
 #include "runtime.h"
+
+#define NUM_ITERATIONS 10000000
 
 static volatile int wait_;
 static long num_threads_;
@@ -180,25 +199,17 @@ void *worker (void *arg) {
     unsigned int rand_seed = id+1;//rdtsc_l();
 
     // Wait for all the worker threads to be ready.
-    __sync_fetch_and_add(&wait_, -1);
+    SYNC_ADD(&wait_, -1);
     do {} while (wait_); 
     __asm__ __volatile__("lfence"); 
 
-    int i;
-    for (i = 0; i < NUM_ITERATIONS/num_threads_; ++i) {
+    for (int i = 0; i < NUM_ITERATIONS/num_threads_; ++i) {
         int n = rand_r(&rand_seed);
         int key = (n & 0xF) + 1;
         if (n & (1 << 8)) {
-            node_t *item = list_node_alloc(key);
-            int success = list_insert(list_, item);
-            if (!success) {
-                nbd_free(item); 
-            }
+            list_add(list_, key, 1);
         } else {
-            node_t *item = list_remove(list_, key);
-            if (item) {
-                nbd_defer_free(item);
-            }
+            list_remove(list_, key);
         }
 
         rcu_update();
@@ -246,13 +257,12 @@ int main (int argc, char **argv) {
     __asm__ __volatile__("sfence"); 
     wait_ = num_threads_;
 
-    int i;
-    for (i = 0; i < num_threads_; ++i) {
+    for (int i = 0; i < num_threads_; ++i) {
         int rc = nbd_thread_create(thread + i, i, worker, (void*)(size_t)i);
         if (rc != 0) { perror("pthread_create"); return rc; }
     }
 
-    for (i = 0; i < num_threads_; ++i) {
+    for (int i = 0; i < num_threads_; ++i) {
         pthread_join(thread[i], NULL);
     }
 

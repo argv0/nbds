@@ -16,6 +16,7 @@
 #include "ht.h"
 #include "murmur.h"
 #include "mem.h"
+#include "struct.h"
 
 #define GET_PTR(x) ((string_t *)((x) & MASK(48))) // low-order 48 bits is a pointer to a string_t
 

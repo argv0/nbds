@@ -5,9 +5,7 @@
 #ifndef HT_H
 #define HT_H
 
-#include "common.h"
-
-#define DOES_NOT_EXIST 0
+#include "struct.h"
 
 #define HT_EXPECT_NOT_EXISTS ( 0)
 #define HT_EXPECT_EXISTS     (-1)

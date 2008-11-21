@@ -32,15 +32,15 @@
 #define SYNC_ADD           __sync_add_and_fetch
 #define SYNC_FETCH_AND_OR  __sync_fetch_and_or
 
-#define MASK(n)     ((1LL << (n)) - 1)
-
-#define TAG          (1LL << 63)
-#define IS_TAGGED(v) ((int64_t)(v) < 0)
-#define TAG_VALUE(v) ((uint64_t)(v) |  TAG)
-#define STRIP_TAG(v) ((uint64_t)(v) & ~TAG)
+#define MASK(n)     ((1ULL << (n)) - 1)
 
 #define TRUE  1
 #define FALSE 0
+
+#define TAG          (1ULL << 63)
+#define TAG_VALUE(v) ((uint64_t)(v) |  TAG)
+#define IS_TAGGED(v) ((uint64_t)(v) &  TAG)
+#define STRIP_TAG(v) ((uint64_t)(v) & ~TAG)
 
 typedef unsigned long long uint64_t;
 typedef unsigned int       uint32_t;
