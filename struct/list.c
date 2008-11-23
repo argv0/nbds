@@ -31,7 +31,7 @@ node_t *node_alloc (uint64_t key, uint64_t value) {
     return item;
 }
 
-list_t *list_alloc (void) {
+list_t *ll_alloc (void) {
     list_t *list = (list_t *)nbd_malloc(sizeof(list_t));
     list->head = node_alloc(0, 0);
     list->last = node_alloc((uint64_t)-1, 0);
@@ -98,8 +98,8 @@ static node_t *find_pred (node_t **pred_ptr, list_t *list, uint64_t key, int hel
 }
 
 // Fast find. Do not help unlink partially removed nodes and do not return the found item's predecessor.
-uint64_t list_lookup (list_t *list, uint64_t key) {
-    TRACE("l3", "list_lookup: searching for key %p in list %p", key, list);
+uint64_t ll_lookup (list_t *list, uint64_t key) {
+    TRACE("l3", "ll_lookup: searching for key %p in list %p", key, list);
     node_t *item = find_pred(NULL, list, key, FALSE);
 
     // If we found an <item> matching the <key> return its value.
@@ -107,8 +107,8 @@ uint64_t list_lookup (list_t *list, uint64_t key) {
 }
 
 // Insert the <key>, if it doesn't already exist in the <list>
-uint64_t list_add (list_t *list, uint64_t key, uint64_t value) {
-    TRACE("l3", "list_add: inserting key %p value %p", key, value);
+uint64_t ll_add (list_t *list, uint64_t key, uint64_t value) {
+    TRACE("l3", "ll_add: inserting key %p value %p", key, value);
     node_t *pred;
     node_t *item = NULL;
     do {
@@ -116,52 +116,52 @@ uint64_t list_add (list_t *list, uint64_t key, uint64_t value) {
 
         // If a node matching <key> already exists in the list, return its value.
         if (next->key == key) {
-            TRACE("l3", "list_add: there is already an item %p (value %p) with the same key", next, next->value);
+            TRACE("l3", "ll_add: there is already an item %p (value %p) with the same key", next, next->value);
             if (EXPECT_FALSE(item != NULL)) { nbd_free(item); }
             return next->value;
         }
 
-        TRACE("l3", "list_add: attempting to insert item between %p and %p", pred, next);
+        TRACE("l3", "ll_add: attempting to insert item between %p and %p", pred, next);
         if (EXPECT_TRUE(item == NULL)) { item = node_alloc(key, value); }
         item->next = next;
         node_t *other = SYNC_CAS(&pred->next, next, item);
         if (other == next) {
-            TRACE("l3", "list_add: successfully inserted item %p", item, 0);
+            TRACE("l3", "ll_add: successfully inserted item %p", item, 0);
             return DOES_NOT_EXIST; // success
         }
-        TRACE("l3", "list_add: failed to change pred's link: expected %p found %p", next, other);
+        TRACE("l3", "ll_add: failed to change pred's link: expected %p found %p", next, other);
 
     } while (1);
 }
 
-uint64_t list_remove (list_t *list, uint64_t key) {
-    TRACE("l3", "list_remove: removing item with key %p from list %p", key, list);
+uint64_t ll_remove (list_t *list, uint64_t key) {
+    TRACE("l3", "ll_remove: removing item with key %p from list %p", key, list);
     node_t *pred;
     node_t *item = find_pred(&pred, list, key, TRUE);
     if (item->key != key) {
-        TRACE("l3", "list_remove: remove failed, an item with a matching key does not exist in the list", 0, 0);
+        TRACE("l3", "ll_remove: remove failed, an item with a matching key does not exist in the list", 0, 0);
         return DOES_NOT_EXIST;
     }
 
     // Mark <item> removed. This must be atomic. If multiple threads try to remove the same item
     // only one of them should succeed.
     if (EXPECT_FALSE(IS_TAGGED(item->next))) {
-        TRACE("l3", "list_remove: %p is already marked for removal by another thread", item, 0);
+        TRACE("l3", "ll_remove: %p is already marked for removal by another thread", item, 0);
         return DOES_NOT_EXIST;
     }
     node_t *next = SYNC_FETCH_AND_OR(&item->next, TAG);
     if (EXPECT_FALSE(IS_TAGGED(next))) {
-        TRACE("l3", "list_remove: lost race -- %p is already marked for removal by another thread", item, 0);
+        TRACE("l3", "ll_remove: lost race -- %p is already marked for removal by another thread", item, 0);
         return DOES_NOT_EXIST;
     }
 
     uint64_t value = item->value;
 
     // Unlink <item> from the list.
-    TRACE("l3", "list_remove: link item's pred %p to it's successor %p", pred, next);
+    TRACE("l3", "ll_remove: link item's pred %p to it's successor %p", pred, next);
     node_t *other;
     if ((other = SYNC_CAS(&pred->next, item, next)) != item) {
-        TRACE("l3", "list_remove: unlink failed; pred's link changed from %p to %p", item, other);
+        TRACE("l3", "ll_remove: unlink failed; pred's link changed from %p to %p", item, other);
         // By marking the item earlier, we logically removed it. It is safe to leave the item.
         // Another thread will finish physically removing it from the list.
         return value;
@@ -172,7 +172,7 @@ uint64_t list_remove (list_t *list, uint64_t key) {
     return value;
 }
 
-void list_print (list_t *list) {
+void ll_print (list_t *list) {
     node_t *item;
     item = list->head;
     while (item) {
@@ -194,7 +194,7 @@ void list_print (list_t *list) {
 
 static volatile int wait_;
 static long num_threads_;
-static list_t *list_;
+static list_t *ll_;
 
 void *worker (void *arg) {
     int id = (int)(size_t)arg;
@@ -209,9 +209,9 @@ void *worker (void *arg) {
         int n = rand_r(&rand_seed);
         int key = (n & 0xF) + 1;
         if (n & (1 << 8)) {
-            list_add(list_, key, 1);
+            ll_add(ll_, key, 1);
         } else {
-            list_remove(list_, key);
+            ll_remove(ll_, key);
         }
 
         rcu_update();
@@ -251,7 +251,7 @@ int main (int argc, char **argv) {
         }
     }
 
-    list_ = list_alloc();
+    ll_ = ll_alloc();
 
     struct timeval tv1, tv2;
     gettimeofday(&tv1, NULL);
@@ -270,7 +270,7 @@ int main (int argc, char **argv) {
     gettimeofday(&tv2, NULL);
     int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
     printf("Th:%ld Time:%dms\n", num_threads_, ms);
-    list_print(list_);
+    ll_print(ll_);
     lwt_dump("lwt.out");
 
     return 0;
