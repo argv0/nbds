@@ -2,7 +2,13 @@
  * Written by Josh Dybnis and released to the public domain, as explained at
  * http://creativecommons.org/licenses/publicdomain
  *
- * lock-free skiplist
+ * C implementation of the lock-free skiplist data-structure created by Maurice Herlihy, 
+ * Yossi Lev, and Nir Shavit. See "The Art of Multiprocessor Programming"
+ * http://www.amazon.com/Art-Multiprocessor-Programming-Maurice-Herlihy/dp/0123705916/
+ *
+ * See also Kir Fraser's dissertation "Practical Lock Freedom"
+ * www.cl.cam.ac.uk/techreports/UCAM-CL-TR-579.pdf
+ *
  */
 #include <stdio.h>
 #include <string.h>
