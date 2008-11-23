@@ -16,8 +16,8 @@ TEST_SRCS      := $(RUNTIME_SRCS)
 rcu_test_SRCS  := $(TEST_SRCS)
 list_test_SRCS := $(TEST_SRCS) struct/list.c
 skiplist_test_SRCS := $(TEST_SRCS) struct/skiplist.c
-ht_test_SRCS   := $(TEST_SRCS) struct/ht.c test/ht_test.c test/CuTest.c
-txn_test_SRCS  := $(TEST_SRCS) struct/ht.c txn/txn.c
+ht_test_SRCS := $(TEST_SRCS) struct/hashtable.c test/ht_test.c test/CuTest.c
+txn_test_SRCS  := $(TEST_SRCS) struct/hashtable.c txn/txn.c
 
 tests: $(TESTS) 
 

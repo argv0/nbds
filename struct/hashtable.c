@@ -13,7 +13,6 @@
  */
 
 #include "common.h"
-#include "ht.h"
 #include "murmur.h"
 #include "mem.h"
 #include "struct.h"

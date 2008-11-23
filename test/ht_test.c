@@ -7,7 +7,7 @@
 #include "runtime.h"
 #include "CuTest.h"
 #include "common.h"
-#include "ht.h"
+#include "struct.h"
 #include "mem.h"
 #include "lwt.h"
 

@@ -3,3 +3,5 @@
 - investigate 16 byte CAS; ht can store GUIDs inline instead of pointers to actual keys 
 - test ht
 + optimize tracing code, still too much overhead
+- use NULL instead of a sentinal node in skiplist and list
+- make interfaces for all data structures consistent 
