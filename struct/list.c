@@ -50,9 +50,9 @@ static node_t *find_pred (node_t **pred_ptr, list_t *list, uint64_t key, int hel
     do {
         node_t *next = item->next;
         TRACE("l3", "find_pred: visiting item %p (next %p)", item, next);
-        TRACE("l3", "find_pred: key %p value %p", item->key, item->value);
+        TRACE("l3", "find_pred: key %p", item->key, item->value);
 
-        // Marked items are partially removed.
+        // Marked items are logically removed, but not unlinked yet.
         while (EXPECT_FALSE(IS_TAGGED(next))) {
 
             // Skip over partially removed items.
@@ -67,7 +67,10 @@ static node_t *find_pred (node_t **pred_ptr, list_t *list, uint64_t key, int hel
             if ((other = SYNC_CAS(&pred->next, item, STRIP_TAG(next))) == item) {
                 item = (node_t *)STRIP_TAG(next);
                 next = item->next;
-                TRACE("l3", "find_pred: unlinked item; %p is the new item (next is %p)", item, next);
+                TRACE("l3", "find_pred: unlinked item %p from pred %p", item, pred);
+                TRACE("l3", "find_pred: now item is %p next is %p", item, next);
+
+                // The thread that completes the unlink should free the memory.
                 nbd_defer_free(other);
             } else {
                 TRACE("l3", "find_pred: lost race to unlink item from pred %p; its link changed to %p", pred, other);
@@ -80,7 +83,7 @@ static node_t *find_pred (node_t **pred_ptr, list_t *list, uint64_t key, int hel
 
         // If we reached the key (or passed where it should be), we found the right predesssor
         if (item->key >= key) {
-            TRACE("l3", "find_pred: returning pred %p and item %p", pred, item);
+            TRACE("l3", "find_pred: found pred %p item %p", pred, item);
             if (pred_ptr != NULL) {
                 *pred_ptr = pred;
             }
@@ -123,7 +126,7 @@ uint64_t list_add (list_t *list, uint64_t key, uint64_t value) {
         item->next = next;
         node_t *other = SYNC_CAS(&pred->next, next, item);
         if (other == next) {
-            TRACE("l3", "list_add: insert was successful", 0, 0);
+            TRACE("l3", "list_add: successfully inserted item %p", item, 0);
             return DOES_NOT_EXIST; // success
         }
         TRACE("l3", "list_add: failed to change pred's link: expected %p found %p", next, other);
@@ -159,8 +162,8 @@ uint64_t list_remove (list_t *list, uint64_t key) {
     node_t *other;
     if ((other = SYNC_CAS(&pred->next, item, next)) != item) {
         TRACE("l3", "list_remove: unlink failed; pred's link changed from %p to %p", item, other);
-        // By being marked, the item was logically removed. It is safe to leave it for
-        // another thread to finish physically removing it from the skiplist.
+        // By marking the item earlier, we logically removed it. It is safe to leave the item.
+        // Another thread will finish physically removing it from the list.
         return value;
     } 
 
@@ -201,7 +204,6 @@ void *worker (void *arg) {
     // Wait for all the worker threads to be ready.
     SYNC_ADD(&wait_, -1);
     do {} while (wait_); 
-    __asm__ __volatile__("lfence"); 
 
     for (int i = 0; i < NUM_ITERATIONS/num_threads_; ++i) {
         int n = rand_r(&rand_seed);
@@ -254,7 +256,6 @@ int main (int argc, char **argv) {
     struct timeval tv1, tv2;
     gettimeofday(&tv1, NULL);
 
-    __asm__ __volatile__("sfence"); 
     wait_ = num_threads_;
 
     for (int i = 0; i < num_threads_; ++i) {

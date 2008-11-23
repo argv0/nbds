@@ -37,4 +37,6 @@ static inline void lwt_trace (const char *flag, const char *format, size_t value
     }
 }
 
+void lwt_halt (void);
+
 #endif//LWT_H
