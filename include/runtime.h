@@ -6,9 +6,8 @@
 #define THREADS_H
 
 void nbd_init (void);
-
 int nbd_thread_create (pthread_t *restrict thread, int thread_id, void *(*start_routine)(void *), void *restrict arg);
-
+int nbd_rand (void);
 void rcu_update (void);
 
 #endif//THREADS_H
