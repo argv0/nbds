@@ -5,3 +5,4 @@
 + optimize tracing code, still too much overhead
 + use NULL instead of a sentinal node in skiplist and list
 - make interfaces for all data structures consistent 
+- make list and skiplist use string keys

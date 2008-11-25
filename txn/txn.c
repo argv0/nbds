@@ -29,7 +29,7 @@ typedef struct write_rec {
 struct txn {
     uint64_t rv;
     uint64_t wv;
-    hash_table_t *ht;
+    hashtable_t *ht;
     write_rec_t *writes;
     uint32_t writes_size;
     uint32_t writes_count;
@@ -50,7 +50,7 @@ update_rec_t *alloc_update_rec (void) {
     return u;
 }
 
-txn_t *txn_begin (txn_access_t access, txn_isolation_t isolation, hash_table_t *ht) {
+txn_t *txn_begin (txn_access_t access, txn_isolation_t isolation, hashtable_t *ht) {
     txn_t *txn = (txn_t *)nbd_malloc(sizeof(txn_t));
     memset(txn, 0, sizeof(txn_t));
     txn->access = access;

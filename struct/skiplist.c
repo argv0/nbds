@@ -33,7 +33,7 @@ typedef struct node {
     struct node *next[];
 } node_t;
 
-typedef struct skiplist {
+typedef struct sl {
     node_t *head;
 } skiplist_t;
 
@@ -62,20 +62,21 @@ node_t *node_alloc (int level, uint64_t key, uint64_t value) {
 }
 
 skiplist_t *sl_alloc (void) {
-    skiplist_t *skiplist = (skiplist_t *)nbd_malloc(sizeof(skiplist_t));
-    skiplist->head = node_alloc(MAX_LEVEL, 0, 0);
-    memset(skiplist->head->next, 0, (MAX_LEVEL+1) * sizeof(skiplist_t *));
-    return skiplist;
+    skiplist_t *sl = (skiplist_t *)nbd_malloc(sizeof(skiplist_t));
+    sl->head = node_alloc(MAX_LEVEL, 0, 0);
+    memset(sl->head->next, 0, (MAX_LEVEL+1) * sizeof(skiplist_t *));
+    return sl;
 }
 
-static node_t *find_preds (node_t *preds[MAX_LEVEL+1], int n, skiplist_t *skiplist, uint64_t key, int help_remove) {
-    node_t *pred = skiplist->head;
+static node_t *find_preds (node_t *preds[MAX_LEVEL+1], int n, skiplist_t *sl, uint64_t key, int help_remove) {
+    node_t *pred = sl->head;
     node_t *item = NULL;
-    TRACE("s3", "find_preds: searching for key %p in skiplist (head is %p)", key, pred);
+    TRACE("s3", "find_preds: searching for key %p in sl (head is %p)", key, pred);
 
+    int start_level = MAX_LEVEL;
+#if MAX_LEVEL > 2
     // Optimization for small lists. No need to traverse empty higher levels.
-    assert(MAX_LEVEL > 2);
-    int start_level = 2;
+    start_level = 2;
     while (pred->next[start_level+1] != NULL) {
         start_level += start_level - 1;
         if (EXPECT_FALSE(start_level >= MAX_LEVEL)) {
@@ -86,14 +87,15 @@ static node_t *find_preds (node_t *preds[MAX_LEVEL+1], int n, skiplist_t *skipli
     if (EXPECT_FALSE(start_level < n)) {
         start_level = n;
     }
+#endif
 
-    // Traverse the levels of the skiplist from the top level to the bottom
+    // Traverse the levels of <sl> from the top level to the bottom
     for (int level = start_level; level >= 0; --level) {
         TRACE("s3", "find_preds: level %llu", level, 0);
         item = pred->next[level];
         if (EXPECT_FALSE(IS_TAGGED(item))) {
             TRACE("s3", "find_preds: pred %p is marked for removal (item %p); retry", pred, item);
-            return find_preds(preds, n, skiplist, key, help_remove); // retry
+            return find_preds(preds, n, sl, key, help_remove); // retry
         }
         while (item != NULL) {
             node_t *next = item->next[level];
@@ -127,7 +129,7 @@ static node_t *find_preds (node_t *preds[MAX_LEVEL+1], int n, skiplist_t *skipli
                 } else {
                     TRACE("s3", "find_preds: lost race to unlink from pred %p; its link changed to %p", pred, other);
                     if (IS_TAGGED(other))
-                        return find_preds(preds, n, skiplist, key, help_remove); // retry
+                        return find_preds(preds, n, sl, key, help_remove); // retry
                     item = other;
                     if (EXPECT_FALSE(item == NULL))
                         break;
@@ -154,31 +156,31 @@ static node_t *find_preds (node_t *preds[MAX_LEVEL+1], int n, skiplist_t *skipli
     if (n == -1 && item != NULL) {
         assert(preds != NULL);
         for (int level = start_level + 1; level <= item->top_level; ++level) {
-            preds[level] = skiplist->head;
+            preds[level] = sl->head;
         }
     }
     return item;
 }
 
 // Fast find that does not help unlink partially removed nodes and does not return the node's predecessors.
-uint64_t sl_lookup (skiplist_t *skiplist, uint64_t key) {
-    TRACE("s3", "sl_lookup: searching for key %p in skiplist %p", key, skiplist);
-    node_t *item = find_preds(NULL, 0, skiplist, key, FALSE);
+uint64_t sl_lookup (skiplist_t *sl, uint64_t key) {
+    TRACE("s3", "sl_lookup: searching for key %p in sl %p", key, sl);
+    node_t *item = find_preds(NULL, 0, sl, key, FALSE);
 
     // If we found an <item> matching the <key> return its value.
     return (item && item->key == key) ? item->value : DOES_NOT_EXIST;
 }
 
-// Insert the <key> if it doesn't already exist in the <skiplist>
-uint64_t sl_add (skiplist_t *skiplist, uint64_t key, uint64_t value) {
+// Insert the <key> if it doesn't already exist in <sl>
+uint64_t sl_add (skiplist_t *sl, uint64_t key, uint64_t value) {
     TRACE("s3", "sl_add: inserting key %p value %p", key, value);
     node_t *preds[MAX_LEVEL+1];
     node_t *item = NULL;
     do {
         int n = random_level();
-        node_t *next = find_preds(preds, n, skiplist, key, TRUE);
+        node_t *next = find_preds(preds, n, sl, key, TRUE);
 
-        // If a node matching <key> already exists in the skiplist, return its value.
+        // If a node matching <key> already exists in <sl>, return its value.
         if (next != NULL && next->key == key) {
             TRACE("s3", "sl_add: there is already an item %p (value %p) with the same key", next, next->value);
             if (EXPECT_FALSE(item != NULL)) { nbd_free(item); }
@@ -203,7 +205,7 @@ uint64_t sl_add (skiplist_t *skiplist, uint64_t key, uint64_t value) {
 
     } while (1);
 
-    // Insert <item> into the skiplist from the bottom level up.
+    // Insert <item> into <sl> from the bottom level up.
     for (int level = 1; level <= item->top_level; ++level) {
         do {
             node_t *pred;
@@ -215,7 +217,7 @@ uint64_t sl_add (skiplist_t *skiplist, uint64_t key, uint64_t value) {
                     break;
                 if (!IS_TAGGED(next) && next->key > key) // pred's link changed
                     break;
-                find_preds(preds, item->top_level, skiplist, key, TRUE);
+                find_preds(preds, item->top_level, sl, key, TRUE);
             } while (1);
 
             do {
@@ -242,16 +244,16 @@ uint64_t sl_add (skiplist_t *skiplist, uint64_t key, uint64_t value) {
     return value;
 }
 
-uint64_t sl_remove (skiplist_t *skiplist, uint64_t key) {
-    TRACE("s3", "sl_remove: removing item with key %p from skiplist %p", key, skiplist);
+uint64_t sl_remove (skiplist_t *sl, uint64_t key) {
+    TRACE("s3", "sl_remove: removing item with key %p from sl %p", key, sl);
     node_t *preds[MAX_LEVEL+1];
-    node_t *item = find_preds(preds, -1, skiplist, key, TRUE);
+    node_t *item = find_preds(preds, -1, sl, key, TRUE);
     if (item == NULL || item->key != key) {
-        TRACE("s3", "sl_remove: remove failed, an item with a matching key does not exist in the skiplist", 0, 0);
+        TRACE("s3", "sl_remove: remove failed, an item with a matching key does not exist in the sl", 0, 0);
         return DOES_NOT_EXIST;
     }
 
-    // Mark <item> removed at each level of the skiplist from the top down. This must be atomic. If multiple threads
+    // Mark <item> removed at each level of <sl> from the top down. This must be atomic. If multiple threads
     // try to remove the same item only one of them should succeed. Marking the bottom level establishes which of 
     // them succeeds.
     for (int level = item->top_level; level >= 0; --level) {
@@ -282,7 +284,7 @@ uint64_t sl_remove (skiplist_t *skiplist, uint64_t key) {
         if ((other = SYNC_CAS(&pred->next[level], item, STRIP_TAG(next))) != item) {
             TRACE("s3", "sl_remove: unlink failed; pred's link changed from %p to %p", item, other);
             // By marking the item earlier, we logically removed it. It is safe to leave the item partially
-            // unlinked. Another thread will finish physically removing it from the skiplist.
+            // unlinked. Another thread will finish physically removing it from <sl>.
             return value;
         }
         --level; 
@@ -293,9 +295,9 @@ uint64_t sl_remove (skiplist_t *skiplist, uint64_t key) {
     return value;
 }
 
-void sl_print (skiplist_t *skiplist) {
+void sl_print (skiplist_t *sl) {
     for (int level = MAX_LEVEL; level >= 0; --level) {
-        node_t *item = skiplist->head;
+        node_t *item = sl->head;
         if (item->next[level] == NULL)
             continue;
         printf("(%d) ", level);
@@ -309,15 +311,20 @@ void sl_print (skiplist_t *skiplist) {
     }
 
     printf("\n");
-    node_t *item = skiplist->head;
+    node_t *item = sl->head;
     while (item) {
         int is_marked = IS_TAGGED(item->next[0]);
-        printf("%s%p:0x%llx [%d]", is_marked ? "*" : "", item, item->key, item->top_level);
+        printf("%s%p:0x%llx ", is_marked ? "*" : "", item, item->key);
+        if (item != sl->head) {
+            printf("[%d]", item->top_level);
+        } else {
+            printf("[*]");
+        }
         for (int level = 1; level <= item->top_level; ++level) {
             node_t *next = (node_t *)STRIP_TAG(item->next[level]);
             is_marked = IS_TAGGED(item->next[0]);
             printf(" %p%s", next, is_marked ? "*" : "");
-            if (item == skiplist->head && item->next[level] == NULL)
+            if (item == sl->head && item->next[level] == NULL)
                 break;
         }
         printf("\n");
@@ -347,7 +354,7 @@ void *worker (void *arg) {
 
     for (int i = 0; i < NUM_ITERATIONS/num_threads_; ++i) {
         unsigned r = nbd_rand();
-        int key = (r & 0xF) + 1;
+        int key = r & 0xF;
         if (r & (1 << 8)) {
             sl_add(sl_, key, 1);
         } else {

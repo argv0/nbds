@@ -16,26 +16,26 @@
 typedef struct worker_data {
     int id;
     CuTest *tc;
-    hash_table_t *ht;
+    hashtable_t *ht;
     int *wait;
 } worker_data_t;
 
-int64_t ht_set (hash_table_t *ht, const char *key, uint32_t key_len, int64_t val) {
-    return ht_compare_and_set(ht, key, key_len, HT_EXPECT_WHATEVER, val);
+int64_t ht_set (hashtable_t *ht, const char *key, uint32_t key_len, int64_t val) {
+    return ht_compare_and_set(ht, key, key_len, EXPECT_WHATEVER, val);
 }
 
-int64_t ht_add (hash_table_t *ht, const char *key, uint32_t key_len, int64_t val) {
-    return ht_compare_and_set(ht, key, key_len, HT_EXPECT_NOT_EXISTS, val);
+int64_t ht_add (hashtable_t *ht, const char *key, uint32_t key_len, int64_t val) {
+    return ht_compare_and_set(ht, key, key_len, EXPECT_DOES_NOT_EXIST, val);
 }
 
-int64_t ht_replace (hash_table_t *ht, const char *key, uint32_t key_len, int64_t val) {
-    return ht_compare_and_set(ht, key, key_len, HT_EXPECT_EXISTS, val);
+int64_t ht_replace (hashtable_t *ht, const char *key, uint32_t key_len, int64_t val) {
+    return ht_compare_and_set(ht, key, key_len, EXPECT_EXISTS, val);
 }
 
 // Test some basic stuff; add a few keys, remove a few keys
 void basic_test (CuTest* tc) {
 
-    hash_table_t *ht = ht_alloc();
+    hashtable_t *ht = ht_alloc();
 
     ASSERT_EQUAL( 0,              ht_count(ht)          );
     ASSERT_EQUAL( DOES_NOT_EXIST, ht_add(ht,"a",2,10)     );
@@ -91,7 +91,7 @@ void basic_test (CuTest* tc) {
 
 void *simple_worker (void *arg) {
     worker_data_t *wd = (worker_data_t *)arg;
-    hash_table_t *ht = wd->ht;
+    hashtable_t *ht = wd->ht;
     CuTest* tc = wd->tc;
     uint64_t d = wd->id;
     int iters = 1000000;
@@ -123,7 +123,7 @@ void simple_add_remove (CuTest* tc) {
     pthread_t thread[2];
     worker_data_t wd[2];
     int wait = 2;
-    hash_table_t *ht = ht_alloc();
+    hashtable_t *ht = ht_alloc();
 
     // In 2 threads, add & remove even & odd elements concurrently
     int i;
@@ -150,7 +150,7 @@ void simple_add_remove (CuTest* tc) {
 void *inserter_worker (void *arg) {
     //pthread_t thread[NUM_THREADS];
 
-    //hash_table_t *ht = ht_alloc();
+    //hashtable_t *ht = ht_alloc();
     return NULL;
 }
 

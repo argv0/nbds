@@ -11,5 +11,5 @@ typedef enum { TXN_DIRTY_READ, TXN_READ_COMMITTED, TXN_REPEATABLE_READ } txn_iso
 
 typedef struct txn txn_t;
 
-txn_t *txn_begin (txn_access_t access, txn_isolation_t isolation, hash_table_t *ht);
+txn_t *txn_begin (txn_access_t access, txn_isolation_t isolation, hashtable_t *ht);
 #endif//TXN_H
