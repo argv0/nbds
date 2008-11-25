@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include "common.h"
 #include "runtime.h"
-#include "runtime_local.h"
+#include "rlocal.h"
 #include "mem.h"
 #include "tls.h"
 

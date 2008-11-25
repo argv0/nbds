@@ -8,7 +8,7 @@
  */
 #include <string.h>
 #include "common.h"
-#include "runtime_local.h"
+#include "rlocal.h"
 #include "lwt.h"
 #include "mem.h"
 #include "tls.h"

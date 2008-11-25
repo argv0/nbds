@@ -16,18 +16,14 @@
 #include "murmur.h"
 #include "mem.h"
 #include "struct.h"
+#include "nstring.h"
 
-#define GET_PTR(x) ((string_t *)((x) & MASK(48))) // low-order 48 bits is a pointer to a string_t
+#define GET_PTR(x) ((nstring_t *)((x) & MASK(48))) // low-order 48 bits is a pointer to a nstring_t
 
 typedef struct ht_entry {
-    uint64_t key;
+    uint64_t key; // ptr to nstring_t
     uint64_t value;
 } entry_t;
-
-typedef struct string {
-    uint32_t len;
-    char val[];
-} string_t;
 
 typedef struct hti {
     volatile entry_t *table;
@@ -49,8 +45,7 @@ static const unsigned ENTRIES_PER_COPY_CHUNK = CACHE_LINE_SIZE/sizeof(entry_t)*2
 static const unsigned MIN_SCALE              = 4; // min 16 entries (4 buckets)
 static const unsigned MAX_BUCKETS_TO_PROBE   = 250;
 
-static int hti_copy_entry 
-    (hashtable_i_t *ht1, volatile entry_t *e, uint32_t e_key_hash, hashtable_i_t *ht2);
+static int hti_copy_entry (hashtable_i_t *ht1, volatile entry_t *e, uint32_t e_key_hash, hashtable_i_t *ht2);
 
 // Choose the next bucket to probe using the high-order bits of <key_hash>.
 static inline int get_next_ndx(int old_ndx, uint32_t key_hash, int ht_scale) {
@@ -67,9 +62,7 @@ static inline int get_next_ndx(int old_ndx, uint32_t key_hash, int ht_scale) {
 static inline int ht_key_equals (uint64_t a, uint32_t b_hash, const char *b_value, uint32_t b_len) {
     if ((b_hash >> 16) != (a >> 48)) // high-order 16 bits are from the hash value
         return FALSE;
-    const string_t *a_key = GET_PTR(a); 
-    assert(a_key);
-    return a_key->len == b_len && memcmp(a_key->val, b_value, b_len) == 0;
+    return ns_equalsc(GET_PTR(a), b_value, b_len);
 }
 
 // Lookup <key> in <hti>. 
@@ -97,14 +90,14 @@ static volatile entry_t *hti_lookup (hashtable_i_t *hti, uint32_t key_hash, cons
 
             uint64_t e_key = e->key;
             if (e_key == DOES_NOT_EXIST) {
-                TRACE("h1", "hti_lookup: entry %p for key \"%s\" is empty", e, GET_PTR(e_key)->val);
+                TRACE("h1", "hti_lookup: entry %p for key \"%s\" is empty", e, ns_val(GET_PTR(e_key)));
                 *is_empty = 1; // indicate an empty so the caller avoids an expensive ht_key_equals
                 return e;
             }
 
             if (ht_key_equals(e_key, key_hash, key_val, key_len)) {
-                TRACE("h1", "hti_lookup: entry %p key \"%s\"", e, GET_PTR(e_key)->val);
-                TRACE("h2", "hti_lookup: entry key len %llu, value %p", GET_PTR(e_key)->len, e->value);
+                TRACE("h1", "hti_lookup: entry %p key \"%s\"", e, ns_val(GET_PTR(e_key)));
+                TRACE("h2", "hti_lookup: entry key len %llu, value %p", ns_len(GET_PTR(e_key)), e->value);
                 return e;
             }
         }
@@ -216,25 +209,24 @@ static int hti_copy_entry (hashtable_i_t *ht1, volatile entry_t *ht1_e, uint32_t
     // to be freed.
     assert(COPIED_VALUE == TAG_VALUE(TOMBSTONE));
     if (ht1_e_value == TOMBSTONE) {
-        TRACE("h1", "hti_copy_entry: entry %p old value was deleted, now freeing key %p", ht1_e, 
-                    GET_PTR(ht1_e->key));
+        TRACE("h1", "hti_copy_entry: entry %p old value was deleted, now freeing key %p", ht1_e, GET_PTR(ht1_e->key));
         nbd_defer_free(GET_PTR(ht1_e->key));
         return TRUE; 
     }
 
     // Install the key in the new table.
     uint64_t key = ht1_e->key;
-    string_t *key_string = GET_PTR(key);
+    nstring_t *key_string = GET_PTR(key);
     uint64_t value = STRIP_TAG(ht1_e_value);
 
     // We use 0 to indicate that <key_hash> isn't initiallized. Occasionally the <key_hash> will
     // really be 0 and we will waste time recomputing it. That is rare enough that it is OK. 
     if (key_hash == 0) { 
-        key_hash = murmur32(key_string->val, key_string->len);
+        key_hash = murmur32(ns_val(key_string), ns_len(key_string));
     }
 
     int is_empty;
-    volatile entry_t *ht2_e = hti_lookup(ht2, key_hash, key_string->val, key_string->len, &is_empty);
+    volatile entry_t *ht2_e = hti_lookup(ht2, key_hash, ns_val(key_string), ns_len(key_string), &is_empty);
     TRACE("h0", "hti_copy_entry: copy entry %p to entry %p", ht1_e, ht2_e);
 
     // it is possible that there is not any room in the new table either
@@ -270,7 +262,7 @@ static int hti_copy_entry (hashtable_i_t *ht1, volatile entry_t *ht1_e, uint32_t
 
     // Update the count if we were the one that completed the copy.
     if (old_ht2_e_value == DOES_NOT_EXIST) {
-        TRACE("h0", "hti_copy_entry: key \"%s\" value %p copied to new entry", key_string->val, value);
+        TRACE("h0", "hti_copy_entry: key \"%s\" value %p copied to new entry", ns_val(key_string), value);
         SYNC_ADD(&ht1->count, -1);
         SYNC_ADD(&ht2->count, 1);
         return TRUE;
@@ -325,9 +317,7 @@ static uint64_t hti_compare_and_set (hashtable_i_t *hti, uint32_t key_hash, cons
             return DOES_NOT_EXIST;
 
         // Allocate <key>.
-        string_t *key = nbd_malloc(sizeof(uint32_t) + key_len);
-        key->len = key_len;
-        memcpy(key->val, key_val, key_len);
+        nstring_t *key = ns_alloc(key_val, key_len);
 
         // Combine <key> pointer with bits from its hash, CAS it into the table. 
         uint64_t temp = ((uint64_t)(key_hash >> 16) << 48) | (uint64_t)key; 
@@ -343,7 +333,7 @@ static uint64_t hti_compare_and_set (hashtable_i_t *hti, uint32_t key_hash, cons
         TRACE("h2", "hti_compare_and_set: installed key %p in entry %p", key, e);
     }
 
-    TRACE("h0", "hti_compare_and_set: entry for key \"%s\" is %p", GET_PTR(e->key)->val, e);
+    TRACE("h0", "hti_compare_and_set: entry for key \"%s\" is %p", ns_val(GET_PTR(e->key)), e);
 
     // If the entry is in the middle of a copy, the copy must be completed first.
     uint64_t e_value = e->value;

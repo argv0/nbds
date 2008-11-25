@@ -15,9 +15,9 @@ RUNTIME_SRCS  := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c
 TEST_SRCS     := $(RUNTIME_SRCS)
 rcu_test_SRCS := $(TEST_SRCS) test/rcu_test.c
 txn_test_SRCS := $(TEST_SRCS) struct/hashtable.c txn/txn.c
-ll_test_SRCS  := $(TEST_SRCS) struct/list.c test/ll_test.c
-sl_test_SRCS  := $(TEST_SRCS) struct/skiplist.c test/sl_test.c
-ht_test_SRCS  := $(TEST_SRCS) struct/hashtable.c test/ht_test.c test/CuTest.c
+ll_test_SRCS  := $(TEST_SRCS) struct/list.c test/ll_test.c struct/nstring.c
+sl_test_SRCS  := $(TEST_SRCS) struct/skiplist.c test/sl_test.c struct/nstring.c
+ht_test_SRCS  := $(TEST_SRCS) struct/hashtable.c test/ht_test.c test/CuTest.c struct/nstring.c
 
 tests: $(TESTS)
 
