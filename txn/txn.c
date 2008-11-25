@@ -240,11 +240,3 @@ void txn_ht_put (txn_t *txn, const char *key, uint32_t key_len, int64_t value) {
     txn->writes[i].key = key;
     txn->writes[i].rec = update;
 }
-
-#ifdef MAKE_txn_test
-#include "runtime.h"
-int main (void) {
-    nbd_init();
-    return 0;
-}
-#endif//txn_test
