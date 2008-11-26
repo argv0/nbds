@@ -10,10 +10,11 @@
 
 #include "common.h"
 #include "struct.h"
+#include "nstring.h"
 #include "mem.h"
 
 typedef struct node {
-    uint64_t key;
+    nstring_t *key;
     uint64_t value;
     struct node *next;
 } node_t;
@@ -22,35 +23,35 @@ struct ll {
     node_t *head;
 };
 
-static node_t *node_alloc (uint64_t key, uint64_t value) {
+static node_t *node_alloc (const void *key_data, uint32_t key_len, uint64_t value) {
     node_t *item = (node_t *)nbd_malloc(sizeof(node_t));
     memset(item, 0, sizeof(node_t));
-    item->key   = key;
+    item->key   = key_data ? ns_alloc(key_data, key_len) : NULL;
     item->value = value;
     return item;
 }
 
 list_t *ll_alloc (void) {
     list_t *ll = (list_t *)nbd_malloc(sizeof(list_t));
-    ll->head = node_alloc((uint64_t)-1, 0);
+    ll->head = node_alloc(" ", 0, 0);
     ll->head->next = NULL;
     return ll;
 }
 
-static node_t *find_pred (node_t **pred_ptr, list_t *ll, uint64_t key, int help_remove) {
+static node_t *find_pred (node_t **pred_ptr, list_t *ll, const void *key_data, uint32_t key_len, int help_remove) {
     node_t *pred = ll->head;
     node_t *item = pred->next;
-    TRACE("l3", "find_pred: searching for key %p in ll (head is %p)", key, pred);
+    TRACE("l3", "find_pred: searching for key %p in ll (head is %p)", key_data, pred);
 
     while (item != NULL) {
         node_t *next = item->next;
         TRACE("l3", "find_pred: visiting item %p (next %p)", item, next);
-        TRACE("l3", "find_pred: key %p", item->key, item->value);
+        TRACE("l3", "find_pred: key \"%s\"", ns_data(item->key), item->value);
 
-        // Marked items are logically removed, but not unlinked yet.
+        // A tag means an item is logically removed but not physically unlinked yet.
         while (EXPECT_FALSE(IS_TAGGED(next))) {
 
-            // Skip over partially removed items.
+            // Skip over logically removed items.
             if (!help_remove) {
                 item = (node_t *)STRIP_TAG(item->next);
                 if (EXPECT_FALSE(item == NULL))
@@ -59,7 +60,7 @@ static node_t *find_pred (node_t **pred_ptr, list_t *ll, uint64_t key, int help_
                 continue;
             }
 
-            // Unlink partially removed items.
+            // Unlink logically removed items.
             node_t *other;
             if ((other = SYNC_CAS(&pred->next, item, STRIP_TAG(next))) == item) {
                 item = (node_t *)STRIP_TAG(next);
@@ -74,7 +75,7 @@ static node_t *find_pred (node_t **pred_ptr, list_t *ll, uint64_t key, int help_
             } else {
                 TRACE("l3", "find_pred: lost race to unlink from pred %p; its link changed to %p", pred, other);
                 if (IS_TAGGED(other))
-                    return find_pred(pred_ptr, ll, key, help_remove); // retry
+                    return find_pred(pred_ptr, ll, key_data, key_len, help_remove); // retry
                 item = other;
                 if (EXPECT_FALSE(item == NULL))
                     break;
@@ -86,12 +87,13 @@ static node_t *find_pred (node_t **pred_ptr, list_t *ll, uint64_t key, int help_
             break;
 
         // If we reached the key (or passed where it should be), we found the right predesssor
-        if (item->key >= key) {
+        int x = ns_cmp_raw(item->key, key_data, key_len);
+        if (x >= 0) {
             TRACE("l3", "find_pred: found pred %p item %p", pred, item);
             if (pred_ptr != NULL) {
                 *pred_ptr = pred;
             }
-            return item;
+            return x == 0 ? item : NULL;
         }
 
         pred = item;
@@ -107,31 +109,32 @@ static node_t *find_pred (node_t **pred_ptr, list_t *ll, uint64_t key, int help_
 }
 
 // Fast find. Do not help unlink partially removed nodes and do not return the found item's predecessor.
-uint64_t ll_lookup (list_t *ll, uint64_t key) {
-    TRACE("l3", "ll_lookup: searching for key %p in ll %p", key, ll);
-    node_t *item = find_pred(NULL, ll, key, FALSE);
+uint64_t ll_lookup (list_t *ll, const void *key_data, uint32_t key_len) {
+    TRACE("l3", "ll_lookup: searching for key %p in ll %p", key_data, ll);
+    node_t *item = find_pred(NULL, ll, key_data, key_len, FALSE);
 
-    // If we found an <item> matching the <key> return its value.
-    return (item && item->key == key) ? item->value : DOES_NOT_EXIST;
+    // If we found an <item> matching the key return its value.
+    return item != NULL ? item->value : DOES_NOT_EXIST;
 }
 
-// Insert the <key>, if it doesn't already exist in <ll>
-uint64_t ll_add (list_t *ll, uint64_t key, uint64_t value) {
-    TRACE("l3", "ll_add: inserting key %p value %p", key, value);
+// Insert a new item if a matching key doesn't already exist in <ll>
+uint64_t ll_add (list_t *ll, const void *key_data, uint32_t key_len, uint64_t value) {
+    TRACE("l3", "ll_add: inserting key %p value %p", key_data, value);
     node_t *pred;
     node_t *item = NULL;
     do {
-        node_t *next = find_pred(&pred, ll, key, TRUE);
+        node_t *next = find_pred(&pred, ll, key_data, key_len, TRUE);
 
-        // If a node matching <key> already exists in <ll>, return its value.
-        if (next != NULL && next->key == key) {
+        // If a node matching the key already exists in <ll> return its value.
+        if (next != NULL) {
             TRACE("l3", "ll_add: there is already an item %p (value %p) with the same key", next, next->value);
             if (EXPECT_FALSE(item != NULL)) { nbd_free(item); }
             return next->value;
         }
 
+        next = pred->next;
         TRACE("l3", "ll_add: attempting to insert item between %p and %p", pred, next);
-        if (EXPECT_TRUE(item == NULL)) { item = node_alloc(key, value); }
+        if (EXPECT_TRUE(item == NULL)) { item = node_alloc(key_data, key_len, value); }
         item->next = next;
         node_t *other = SYNC_CAS(&pred->next, next, item);
         if (other == next) {
@@ -143,11 +146,11 @@ uint64_t ll_add (list_t *ll, uint64_t key, uint64_t value) {
     } while (1);
 }
 
-uint64_t ll_remove (list_t *ll, uint64_t key) {
-    TRACE("l3", "ll_remove: removing item with key %p from ll %p", key, ll);
+uint64_t ll_remove (list_t *ll, const void *key_data, uint32_t key_len) {
+    TRACE("l3", "ll_remove: removing item with key %p from ll %p", key_data, ll);
     node_t *pred;
-    node_t *item = find_pred(&pred, ll, key, TRUE);
-    if (item == NULL || item->key != key) {
+    node_t *item = find_pred(&pred, ll, key_data, key_len, TRUE);
+    if (item == NULL) {
         TRACE("l3", "ll_remove: remove failed, an item with a matching key does not exist in the ll", 0, 0);
         return DOES_NOT_EXIST;
     }
@@ -185,7 +188,7 @@ void ll_print (list_t *ll) {
     node_t *item;
     item = ll->head->next;
     while (item) {
-        printf("0x%llx ", item->key);
+        printf("%s ", (char *)ns_data(item->key));
         fflush(stdout);
         item = item->next;
     }

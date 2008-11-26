@@ -22,10 +22,12 @@ void *worker (void *arg) {
     for (int i = 0; i < NUM_ITERATIONS/num_threads_; ++i) {
         unsigned r = nbd_rand();
         int key = r & 0xF;
+        char key_str[10];
+        sprintf(key_str, "%X", key);
         if (r & (1 << 8)) {
-            sl_add(sl_, key, 1);
+            sl_add(sl_, key_str, strlen(key_str) + 1, 1);
         } else {
-            sl_remove(sl_, key);
+            sl_remove(sl_, key_str, strlen(key_str) + 1);
         }
 
         rcu_update();
