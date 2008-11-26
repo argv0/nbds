@@ -24,7 +24,7 @@
 #include "tls.h"
 
 // Setting MAX_LEVEL to 0 essentially makes this data structure the Harris-Michael lock-free list
-// in list.c
+// (in list.c).
 #define MAX_LEVEL 31
 
 typedef struct node {
@@ -56,7 +56,10 @@ node_t *node_alloc (int level, const void *key_data, uint32_t key_len, uint64_t 
     size_t sz = sizeof(node_t) + (level + 1) * sizeof(node_t *);
     node_t *item = (node_t *)nbd_malloc(sz);
     memset(item, 0, sz);
-    item->key   = ns_alloc(key_data, key_len);
+    // If <key_len> is -1 it indicates <key_data> is an integer and not a pointer
+    item->key = (key_len == (unsigned)-1) 
+              ? (void *)TAG_VALUE(key_data) 
+              : ns_alloc(key_data, key_len); 
     item->value = value;
     item->top_level = level;
     return item;
@@ -101,7 +104,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
         while (item != NULL) {
             node_t *next = item->next[level];
             TRACE("s3", "find_preds: visiting item %p (next %p)", item, next);
-            TRACE("s3", "find_preds: key %p", item->key, 0);
+            TRACE("s3", "find_preds: key %p", STRIP_TAG(item->key), item->value);
 
             // A tag means an item is logically removed but not physically unlinked yet.
             while (EXPECT_FALSE(IS_TAGGED(next))) {
@@ -142,7 +145,9 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
                 break;
 
             // If we reached the key (or passed where it should be), we found a pred. Save it and continue down.
-            x = ns_cmp_raw(item->key, key_data, key_len);
+            x = (IS_TAGGED(item->key))
+              ? (STRIP_TAG(item->key) - (uint64_t)key_data)
+              : ns_cmp_raw(item->key, key_data, key_len);
             if (x >= 0) {
                 TRACE("s3", "find_preds: found pred %p item %p", pred, item);
                 break;
@@ -152,7 +157,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
             item = next;
         }
 
-        // The comparison is unsigned for the case when n is -1.
+        // The cast to unsigned is for the case when n is -1.
         if ((unsigned)level <= (unsigned)n) { 
             if (preds != NULL) {
                 preds[level] = pred;
@@ -181,7 +186,7 @@ uint64_t sl_lookup (skiplist_t *sl, const void *key_data, uint32_t key_len) {
 
 // Insert the <key> if it doesn't already exist in <sl>
 uint64_t sl_add (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_t value) {
-    TRACE("s3", "sl_add: inserting key %p value %p", key, value);
+    TRACE("s3", "sl_add: inserting key %p value %p", key_data, value);
     node_t *preds[MAX_LEVEL+1];
     node_t *nexts[MAX_LEVEL+1];
     node_t *item = NULL;
@@ -315,7 +320,12 @@ void sl_print (skiplist_t *sl) {
     node_t *item = sl->head;
     while (item) {
         int is_marked = IS_TAGGED(item->next[0]);
-        printf("%s%p:%s ", is_marked ? "*" : "", item, (char *)ns_data(item->key));
+
+        if (IS_TAGGED(item->key)) {
+            printf("%s%p:%llx ", is_marked ? "*" : "", item, STRIP_TAG(item->key));
+        } else {
+            printf("%s%p:%s ", is_marked ? "*" : "", item, (char *)ns_data(item->key));
+        }
         if (item != sl->head) {
             printf("[%d]", item->top_level);
         } else {

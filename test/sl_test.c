@@ -21,14 +21,22 @@ void *worker (void *arg) {
 
     for (int i = 0; i < NUM_ITERATIONS/num_threads_; ++i) {
         unsigned r = nbd_rand();
-        int key = r & 0xF;
+        uint64_t key = r & 0xF;
+#if 1
         char key_str[10];
-        sprintf(key_str, "%X", key);
+        sprintf(key_str, "%llX", key);
         if (r & (1 << 8)) {
             sl_add(sl_, key_str, strlen(key_str) + 1, 1);
         } else {
             sl_remove(sl_, key_str, strlen(key_str) + 1);
         }
+#else
+        if (r & (1 << 8)) {
+            sl_add(sl_, (void *)key, -1, 1);
+        } else {
+            sl_remove(sl_, (void *)key, -1);
+        }
+#endif
 
         rcu_update();
     }

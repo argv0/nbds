@@ -26,7 +26,10 @@ struct ll {
 static node_t *node_alloc (const void *key_data, uint32_t key_len, uint64_t value) {
     node_t *item = (node_t *)nbd_malloc(sizeof(node_t));
     memset(item, 0, sizeof(node_t));
-    item->key   = key_data ? ns_alloc(key_data, key_len) : NULL;
+    // If <key_len> is -1 it indicates <key_data> is an integer and not a pointer
+    item->key = (key_len == (unsigned)-1) 
+              ? (void *)TAG_VALUE(key_data) 
+              : ns_alloc(key_data, key_len); 
     item->value = value;
     return item;
 }
@@ -46,7 +49,7 @@ static node_t *find_pred (node_t **pred_ptr, list_t *ll, const void *key_data, u
     while (item != NULL) {
         node_t *next = item->next;
         TRACE("l3", "find_pred: visiting item %p (next %p)", item, next);
-        TRACE("l3", "find_pred: key \"%s\"", ns_data(item->key), item->value);
+        TRACE("l3", "find_pred: key %p", STRIP_TAG(item->key), item->value);
 
         // A tag means an item is logically removed but not physically unlinked yet.
         while (EXPECT_FALSE(IS_TAGGED(next))) {
@@ -87,7 +90,9 @@ static node_t *find_pred (node_t **pred_ptr, list_t *ll, const void *key_data, u
             break;
 
         // If we reached the key (or passed where it should be), we found the right predesssor
-        int x = ns_cmp_raw(item->key, key_data, key_len);
+        int x = (IS_TAGGED(item->key))
+              ? (STRIP_TAG(item->key) - (uint64_t)key_data)
+              : ns_cmp_raw(item->key, key_data, key_len);
         if (x >= 0) {
             TRACE("l3", "find_pred: found pred %p item %p", pred, item);
             if (pred_ptr != NULL) {
@@ -188,7 +193,11 @@ void ll_print (list_t *ll) {
     node_t *item;
     item = ll->head->next;
     while (item) {
-        printf("%s ", (char *)ns_data(item->key));
+        if (IS_TAGGED(item->key)) {
+            printf("0x%llx ", STRIP_TAG(item->key));
+        } else {
+            printf("%s ", (char *)ns_data(item->key));
+        }
         fflush(stdout);
         item = item->next;
     }
