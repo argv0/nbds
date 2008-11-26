@@ -69,12 +69,11 @@ skiplist_t *sl_alloc (void) {
     return sl;
 }
 
-static node_t *find_preds (int *found, node_t *preds[MAX_LEVEL+1], int n, skiplist_t *sl, const void *key_data, uint32_t key_len, int help_remove) {
+static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl, const void *key_data, uint32_t key_len, int help_remove) {
     node_t *pred = sl->head;
     node_t *item = NULL;
     TRACE("s3", "find_preds: searching for key %p in sl (head is %p)", key_data, pred);
-    *found = 0;
-
+    int x;
     int start_level = MAX_LEVEL;
 #if MAX_LEVEL > 2
     // Optimization for small lists. No need to traverse empty higher levels.
@@ -97,7 +96,7 @@ static node_t *find_preds (int *found, node_t *preds[MAX_LEVEL+1], int n, skipli
         item = pred->next[level];
         if (EXPECT_FALSE(IS_TAGGED(item))) {
             TRACE("s3", "find_preds: pred %p is marked for removal (item %p); retry", pred, item);
-            return find_preds(found, preds, n, sl, key_data, key_len, help_remove); // retry
+            return find_preds(preds, succs, n, sl, key_data, key_len, help_remove); // retry
         }
         while (item != NULL) {
             node_t *next = item->next[level];
@@ -131,7 +130,7 @@ static node_t *find_preds (int *found, node_t *preds[MAX_LEVEL+1], int n, skipli
                 } else {
                     TRACE("s3", "find_preds: lost race to unlink from pred %p; its link changed to %p", pred, other);
                     if (IS_TAGGED(other))
-                        return find_preds(found, preds, n, sl, key_data, key_len, help_remove); // retry
+                        return find_preds(preds, succs, n, sl, key_data, key_len, help_remove); // retry
                     item = other;
                     if (EXPECT_FALSE(item == NULL))
                         break;
@@ -143,11 +142,8 @@ static node_t *find_preds (int *found, node_t *preds[MAX_LEVEL+1], int n, skipli
                 break;
 
             // If we reached the key (or passed where it should be), we found a pred. Save it and continue down.
-            int x = ns_cmp_raw(item->key, key_data, key_len);
+            x = ns_cmp_raw(item->key, key_data, key_len);
             if (x >= 0) {
-                if (level == 0 && x == 0) {
-                    *found = 1;
-                }
                 TRACE("s3", "find_preds: found pred %p item %p", pred, item);
                 break;
             }
@@ -155,55 +151,59 @@ static node_t *find_preds (int *found, node_t *preds[MAX_LEVEL+1], int n, skipli
             pred = item;
             item = next;
         }
-        if (preds != NULL) {
-            preds[level] = pred;
+
+        // The comparison is unsigned for the case when n is -1.
+        if ((unsigned)level <= (unsigned)n) { 
+            if (preds != NULL) {
+                preds[level] = pred;
+            }
+            if (succs != NULL) {
+                succs[level] = item;
+            }
         }
     }
     if (n == -1 && item != NULL) {
-        assert(preds != NULL);
         for (int level = start_level + 1; level <= item->top_level; ++level) {
             preds[level] = sl->head;
         }
     }
-    return item;
+    return x == 0 ? item : NULL;
 }
 
 // Fast find that does not help unlink partially removed nodes and does not return the node's predecessors.
 uint64_t sl_lookup (skiplist_t *sl, const void *key_data, uint32_t key_len) {
     TRACE("s3", "sl_lookup: searching for key %p in sl %p", key, sl);
-    int found;
-    node_t *item = find_preds(&found, NULL, 0, sl, key_data, key_len, FALSE);
+    node_t *item = find_preds(NULL, NULL, 0, sl, key_data, key_len, FALSE);
 
     // If we found an <item> matching the <key> return its value.
-    return found ? item->value : DOES_NOT_EXIST;
+    return item != NULL ? item->value : DOES_NOT_EXIST;
 }
 
 // Insert the <key> if it doesn't already exist in <sl>
 uint64_t sl_add (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_t value) {
     TRACE("s3", "sl_add: inserting key %p value %p", key, value);
     node_t *preds[MAX_LEVEL+1];
+    node_t *nexts[MAX_LEVEL+1];
     node_t *item = NULL;
     int n = random_level();
     do {
-        int found;
-        node_t *next = find_preds(&found, preds, n, sl, key_data, key_len, TRUE);
+        node_t *next = find_preds(preds, nexts, n, sl, key_data, key_len, TRUE);
 
         // If a node matching <key> already exists in <sl>, return its value.
-        if (found) {
-            TRACE("s3", "sl_add: there is already an item %p (value %p) with the same key", next, next->value);
+        if (next != NULL) {
+            TRACE("s3", "sl_add: there is already an item %p (value %p) with the same key", nexts[0], nexts[0]->value);
             if (EXPECT_FALSE(item != NULL)) { nbd_free(item); }
-            return next->value;
+            return nexts[0]->value;
         }
 
         // First insert <item> into the bottom level.
         if (EXPECT_TRUE(item == NULL)) { item = node_alloc(n, key_data, key_len, value); }
-        TRACE("s3", "sl_add: attempting to insert item between %p and %p", preds[0], next);
-        item->next[0] = next;
-        for (int level = 1; level <= item->top_level; ++level) {
-            node_t *pred = preds[level];
-            item->next[level] = pred->next[level];
-        }
         node_t *pred = preds[0];
+        item->next[0] = next = nexts[0];
+        TRACE("s3", "sl_add: attempting to insert item between %p and %p", pred, next);
+        for (int level = 1; level <= item->top_level; ++level) {
+            item->next[level] = nexts[level];
+        }
         node_t *other = SYNC_CAS(&pred->next[0], next, item);
         if (other == next) {
             TRACE("s3", "sl_add: successfully inserted item %p at level 0", item, 0);
@@ -215,31 +215,9 @@ uint64_t sl_add (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_
 
     // Insert <item> into <sl> from the bottom level up.
     for (int level = 1; level <= item->top_level; ++level) {
+        node_t *pred = preds[level];
+        node_t *next = nexts[level];
         do {
-            node_t *pred;
-            node_t *next;
-            do {
-                pred = preds[level];
-                next = pred->next[level];
-                if (next == NULL) // item goes at the end of the list
-                    break;
-                if (!IS_TAGGED(next) && ns_cmp_raw(next->key, key_data, key_len) > 0) // pred's link changed
-                    break;
-                int found;
-                find_preds(&found, preds, item->top_level, sl, key_data, key_len, TRUE);
-            } while (1);
-
-            do {
-                // There in no need to continue linking in the item if another thread removed it.
-                node_t *old_next = ((volatile node_t *)item)->next[level];
-                if (IS_TAGGED(old_next))
-                    return DOES_NOT_EXIST; // success
-
-                // Use a CAS so we to not inadvertantly remove a mark another thread placed on the item.
-                if (next == old_next || SYNC_CAS(&item->next[level], old_next, next) == old_next)
-                    break;
-            } while (1);
-
             TRACE("s3", "sl_add: attempting to insert item between %p and %p", pred, next);
             node_t *other = SYNC_CAS(&pred->next[level], next, item);
             if (other == next) {
@@ -247,7 +225,21 @@ uint64_t sl_add (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_
                 break; // success
             }
             TRACE("s3", "sl_add: failed to change pred's link: expected %p found %p", next, other);
+            find_preds(preds, nexts, item->top_level, sl, key_data, key_len, TRUE);
+            pred = preds[level];
+            next = nexts[level];
 
+            // Update <item>'s next pointer
+            do {
+                // There in no need to continue linking in the item if another thread removed it.
+                node_t *old_next = ((volatile node_t *)item)->next[level];
+                if (IS_TAGGED(old_next))
+                    return value;
+
+                // Use a CAS so we to not inadvertantly stomp on a mark another thread placed on the item.
+                if (old_next == next || SYNC_CAS(&item->next[level], old_next, next) == old_next)
+                    break;
+            } while (1);
         } while (1);
     }
     return value;
@@ -255,10 +247,9 @@ uint64_t sl_add (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_
 
 uint64_t sl_remove (skiplist_t *sl, const void *key_data, uint32_t key_len) {
     TRACE("s3", "sl_remove: removing item with key %p from sl %p", key_data, sl);
-    int found;
     node_t *preds[MAX_LEVEL+1];
-    node_t *item = find_preds(&found, preds, -1, sl, key_data, key_len, TRUE);
-    if (!found) {
+    node_t *item = find_preds(preds, NULL, -1, sl, key_data, key_len, TRUE);
+    if (item == NULL) {
         TRACE("s3", "sl_remove: remove failed, an item with a matching key does not exist in the sl", 0, 0);
         return DOES_NOT_EXIST;
     }
