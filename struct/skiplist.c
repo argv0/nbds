@@ -40,13 +40,12 @@ struct sl {
 
 static int random_level (void) {
     unsigned r = nbd_rand();
-    if (r&1)
+    if (r & 1)
         return 0;
-    int n = __builtin_ctz(r)-1;
 #if MAX_LEVEL < 31
-    if (n > MAX_LEVEL)
-        return MAX_LEVEL;
+    r |= 1 << (MAX_LEVEL+1);
 #endif
+    int n = __builtin_ctz(r)-1;
     assert(n <= MAX_LEVEL);
     return n;
 }
