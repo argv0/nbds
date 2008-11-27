@@ -26,13 +26,13 @@ void *worker (void *arg) {
         char key_str[10];
         sprintf(key_str, "%llX", key);
         if (r & (1 << 8)) {
-            ll_add(ll_, key_str, strlen(key_str) + 1, 1);
+            ll_cas(ll_, key_str, strlen(key_str) + 1, EXPECT_WHATEVER, 1);
         } else {
             ll_remove(ll_, key_str, strlen(key_str) + 1);
         }
 #else
         if (r & (1 << 8)) {
-            ll_add(ll_, (void *)key, -1, 1);
+            ll_cas(ll_, (void *)key, -1, EXPECT_WHATEVER, 1);
         } else {
             ll_remove(ll_, (void *)key, -1);
         }
@@ -46,7 +46,7 @@ void *worker (void *arg) {
 
 int main (int argc, char **argv) {
     nbd_init();
-    //lwt_set_trace_level("m0l0");
+    lwt_set_trace_level("l3");
 
     char* program_name = argv[0];
     pthread_t thread[MAX_NUM_THREADS];

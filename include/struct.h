@@ -7,7 +7,7 @@
 #define EXPECT_EXISTS         (-1)
 #define EXPECT_WHATEVER       (-2)
 
-typedef struct hti *hashtable_t;
+typedef struct ht hashtable_t;
 hashtable_t *ht_alloc (void);
 void ht_free (hashtable_t *ht);
 
@@ -20,7 +20,7 @@ typedef struct ll list_t;
 list_t * ll_alloc (void);
 
 uint64_t ll_lookup (list_t *ll, const void *key_data, uint32_t key_len);
-uint64_t ll_add    (list_t *ll, const void *key_data, uint32_t key_len, uint64_t value);
+uint64_t ll_cas    (list_t *ll, const void *key_data, uint32_t key_len, uint64_t expected_val, uint64_t new_val);
 uint64_t ll_remove (list_t *ll, const void *key_data, uint32_t key_len);
 void     ll_print  (list_t *ll);
 

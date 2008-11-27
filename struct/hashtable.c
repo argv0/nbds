@@ -37,6 +37,10 @@ typedef struct hti {
     int scan;
 } hashtable_i_t;
 
+struct ht {
+    hashtable_i_t *hti;
+};
+
 static const uint64_t COPIED_VALUE           = -1;
 static const uint64_t TOMBSTONE              = STRIP_TAG(-1);
 
@@ -421,7 +425,7 @@ static uint64_t hti_get (hashtable_i_t *hti, uint32_t key_hash, const char *key_
 
 //
 uint64_t ht_get (hashtable_t *ht, const char *key_data, uint32_t key_len) {
-    return hti_get(*ht, murmur32(key_data, key_len), key_data, key_len);
+    return hti_get(ht->hti, murmur32(key_data, key_len), key_data, key_len);
 }
 
 //
@@ -433,7 +437,7 @@ uint64_t ht_compare_and_set (hashtable_t *ht, const char *key_data, uint32_t key
     assert(key_data);
     assert(!IS_TAGGED(new_val) && new_val != DOES_NOT_EXIST);
 
-    hashtable_i_t *hti = *ht;
+    hashtable_i_t *hti = ht->hti;
 
     // Help with an ongoing copy.
     if (EXPECT_FALSE(hti->next != NULL)) {
@@ -475,7 +479,7 @@ uint64_t ht_compare_and_set (hashtable_t *ht, const char *key_data, uint32_t key
         // Dispose of fully copied tables.
         if (hti->num_entries_copied == (1 << hti->scale) || panic) {
             assert(hti->next);
-            if (SYNC_CAS(ht, hti, hti->next) == hti) {
+            if (SYNC_CAS(&ht->hti, hti, hti->next) == hti) {
                 nbd_defer_free(hti); 
             }
         }
@@ -495,7 +499,7 @@ uint64_t ht_compare_and_set (hashtable_t *ht, const char *key_data, uint32_t key
 // Remove the value in <ht> associated with <key_data>. Returns the value removed, or 
 // DOES_NOT_EXIST if there was no value for that key.
 uint64_t ht_remove (hashtable_t *ht, const char *key_data, uint32_t key_len) {
-    hashtable_i_t *hti = *ht;
+    hashtable_i_t *hti = ht->hti;
     uint64_t val;
     uint32_t key_hash = murmur32(key_data, key_len);
     do {
@@ -510,7 +514,7 @@ uint64_t ht_remove (hashtable_t *ht, const char *key_data, uint32_t key_len) {
 
 // Returns the number of key-values pairs in <ht>
 uint64_t ht_count (hashtable_t *ht) {
-    hashtable_i_t *hti = *ht;
+    hashtable_i_t *hti = ht->hti;
     uint64_t count = 0;
     while (hti) {
         count += hti->count;
@@ -522,13 +526,13 @@ uint64_t ht_count (hashtable_t *ht) {
 // Allocate and initialize a new hash table.
 hashtable_t *ht_alloc (void) {
     hashtable_t *ht = nbd_malloc(sizeof(hashtable_t));
-    *ht = (hashtable_i_t *)hti_alloc(ht, MIN_SCALE);
+    ht->hti = (hashtable_i_t *)hti_alloc(ht, MIN_SCALE);
     return ht;
 }
 
 // Free <ht> and its internal structures.
 void ht_free (hashtable_t *ht) {
-    hashtable_i_t *hti = *ht;
+    hashtable_i_t *hti = ht->hti;
     do {
         for (uint32_t i = 0; i < (1 << hti->scale); ++i) {
             assert(hti->table[i].value == COPIED_VALUE || !IS_TAGGED(hti->table[i].value));

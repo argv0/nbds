@@ -18,12 +18,6 @@
 
 #define CACHE_LINE_SIZE 64
 
-#define CAT(x,y) x##y
-#define ON_EXIT_SCOPE_I(x,i) \
-    inline void CAT(scope_cleanup_function_, i) (int *CAT(scope_cleanup_dummy_argument_, i)) { x; }; \
-    int CAT(scope_cleanup_dummy_variable_, i) __attribute__((cleanup(CAT(scope_cleanup_function_, i))));
-#define ON_EXIT_SCOPE(x) ON_EXIT_SCOPE_I(x,__LINE__)
-
 #define EXPECT_TRUE(x)     __builtin_expect(x, 1)
 #define EXPECT_FALSE(x)    __builtin_expect(x, 0)
 

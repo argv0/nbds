@@ -29,7 +29,7 @@
 
 typedef struct node {
     nstring_t *key;
-    uint64_t value;
+    uint64_t val;
     int top_level;
     struct node *next[];
 } node_t;
@@ -50,7 +50,7 @@ static int random_level (void) {
     return n;
 }
 
-node_t *node_alloc (int level, const void *key_data, uint32_t key_len, uint64_t value) {
+node_t *node_alloc (int level, const void *key_data, uint32_t key_len, uint64_t val) {
     assert(level >= 0 && level <= MAX_LEVEL);
     size_t sz = sizeof(node_t) + (level + 1) * sizeof(node_t *);
     node_t *item = (node_t *)nbd_malloc(sz);
@@ -59,9 +59,23 @@ node_t *node_alloc (int level, const void *key_data, uint32_t key_len, uint64_t 
     item->key = (key_len == (unsigned)-1) 
               ? (void *)TAG_VALUE(key_data) 
               : ns_alloc(key_data, key_len); 
-    item->value = value;
+    item->val = val;
     item->top_level = level;
     return item;
+}
+
+static void node_free (node_t *item) {
+    if (!IS_TAGGED(item->key)) {
+        nbd_free(item->key);
+    }
+    nbd_free(item);
+}
+
+static void node_defer_free (node_t *item) {
+    if (!IS_TAGGED(item->key)) {
+        nbd_defer_free(item->key);
+    }
+    nbd_defer_free(item);
 }
 
 skiplist_t *sl_alloc (void) {
@@ -103,7 +117,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
         while (item != NULL) {
             node_t *next = item->next[level];
             TRACE("s3", "find_preds: visiting item %p (next %p)", item, next);
-            TRACE("s3", "find_preds: key %p", STRIP_TAG(item->key), item->value);
+            TRACE("s3", "find_preds: key %p", STRIP_TAG(item->key), item->val);
 
             // A tag means an item is logically removed but not physically unlinked yet.
             while (EXPECT_FALSE(IS_TAGGED(next))) {
@@ -128,7 +142,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
                     TRACE("s3", "find_preds: now item is %p next is %p", item, next);
 
                     // The thread that completes the unlink should free the memory.
-                    if (level == 0) { nbd_defer_free(other); }
+                    if (level == 0) { node_defer_free(other); }
                 } else {
                     TRACE("s3", "find_preds: lost race to unlink from pred %p; its link changed to %p", pred, other);
                     if (IS_TAGGED(other))
@@ -176,85 +190,85 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
 
 // Fast find that does not help unlink partially removed nodes and does not return the node's predecessors.
 uint64_t sl_lookup (skiplist_t *sl, const void *key_data, uint32_t key_len) {
-    TRACE("s3", "sl_lookup: searching for key %p in sl %p", key, sl);
+    TRACE("s3", "sl_lookup: searching for key %p in skiplist %p", key, sl);
     node_t *item = find_preds(NULL, NULL, 0, sl, key_data, key_len, FALSE);
 
     // If we found an <item> matching the <key> return its value.
-    return item != NULL ? item->value : DOES_NOT_EXIST;
+    return item != NULL ? item->val : DOES_NOT_EXIST;
 }
 
 // Insert the <key> if it doesn't already exist in <sl>
-uint64_t sl_add (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_t value) {
-    TRACE("s3", "sl_add: inserting key %p value %p", key_data, value);
+uint64_t sl_add (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_t val) {
+    TRACE("s3", "sl_add: inserting key %p val %p", key_data, val);
     node_t *preds[MAX_LEVEL+1];
     node_t *nexts[MAX_LEVEL+1];
-    node_t *item = NULL;
+    node_t *new_item = NULL;
     int n = random_level();
     do {
-        node_t *next = find_preds(preds, nexts, n, sl, key_data, key_len, TRUE);
+        node_t *old_item = find_preds(preds, nexts, n, sl, key_data, key_len, TRUE);
 
         // If a node matching <key> already exists in <sl>, return its value.
-        if (next != NULL) {
-            TRACE("s3", "sl_add: there is already an item %p (value %p) with the same key", nexts[0], nexts[0]->value);
-            if (EXPECT_FALSE(item != NULL)) { nbd_free(item); }
-            return nexts[0]->value;
+        if (old_item != NULL) {
+            TRACE("s3", "sl_add: there is already an item %p (value %p) with the same key", nexts[0], nexts[0]->val);
+            return nexts[0]->val;
         }
 
-        // First insert <item> into the bottom level.
-        if (EXPECT_TRUE(item == NULL)) { item = node_alloc(n, key_data, key_len, value); }
+        // First insert <new_item> into the bottom level.
+        TRACE("s3", "sl_add: attempting to insert item between %p and %p", preds[0], nexts[0]);
+        new_item = node_alloc(n, key_data, key_len, val);
         node_t *pred = preds[0];
-        item->next[0] = next = nexts[0];
-        TRACE("s3", "sl_add: attempting to insert item between %p and %p", pred, next);
-        for (int level = 1; level <= item->top_level; ++level) {
-            item->next[level] = nexts[level];
+        node_t *next = new_item->next[0] = nexts[0];
+        for (int level = 1; level <= new_item->top_level; ++level) {
+            new_item->next[level] = nexts[level];
         }
-        node_t *other = SYNC_CAS(&pred->next[0], next, item);
+        node_t *other = SYNC_CAS(&pred->next[0], next, new_item);
         if (other == next) {
-            TRACE("s3", "sl_add: successfully inserted item %p at level 0", item, 0);
+            TRACE("s3", "sl_add: successfully inserted item %p at level 0", new_item, 0);
             break; // success
         }
         TRACE("s3", "sl_add: failed to change pred's link: expected %p found %p", next, other);
+        node_free(new_item);
 
     } while (1);
 
-    // Insert <item> into <sl> from the bottom level up.
-    for (int level = 1; level <= item->top_level; ++level) {
+    // Insert <new_item> into <sl> from the bottom level up.
+    for (int level = 1; level <= new_item->top_level; ++level) {
         node_t *pred = preds[level];
         node_t *next = nexts[level];
         do {
             TRACE("s3", "sl_add: attempting to insert item between %p and %p", pred, next);
-            node_t *other = SYNC_CAS(&pred->next[level], next, item);
+            node_t *other = SYNC_CAS(&pred->next[level], next, new_item);
             if (other == next) {
-                TRACE("s3", "sl_add: successfully inserted item %p at level %llu", item, level);
+                TRACE("s3", "sl_add: successfully inserted item %p at level %llu", new_item, level);
                 break; // success
             }
             TRACE("s3", "sl_add: failed to change pred's link: expected %p found %p", next, other);
-            find_preds(preds, nexts, item->top_level, sl, key_data, key_len, TRUE);
+            find_preds(preds, nexts, new_item->top_level, sl, key_data, key_len, TRUE);
             pred = preds[level];
             next = nexts[level];
 
-            // Update <item>'s next pointer
+            // Update <new_item>'s next pointer
             do {
                 // There in no need to continue linking in the item if another thread removed it.
-                node_t *old_next = ((volatile node_t *)item)->next[level];
+                node_t *old_next = ((volatile node_t *)new_item)->next[level];
                 if (IS_TAGGED(old_next))
-                    return value;
+                    return val;
 
-                // Use a CAS so we to not inadvertantly stomp on a mark another thread placed on the item.
-                if (old_next == next || SYNC_CAS(&item->next[level], old_next, next) == old_next)
+                // Use a CAS so we do not inadvertantly stomp on a mark another thread placed on the item.
+                if (old_next == next || SYNC_CAS(&new_item->next[level], old_next, next) == old_next)
                     break;
             } while (1);
         } while (1);
     }
-    return value;
+    return val;
 }
 
 uint64_t sl_remove (skiplist_t *sl, const void *key_data, uint32_t key_len) {
-    TRACE("s3", "sl_remove: removing item with key %p from sl %p", key_data, sl);
+    TRACE("s3", "sl_remove: removing item with key %p from skiplist %p", key_data, sl);
     node_t *preds[MAX_LEVEL+1];
     node_t *item = find_preds(preds, NULL, -1, sl, key_data, key_len, TRUE);
     if (item == NULL) {
-        TRACE("s3", "sl_remove: remove failed, an item with a matching key does not exist in the sl", 0, 0);
+        TRACE("s3", "sl_remove: remove failed, an item with a matching key does not exist in the skiplist", 0, 0);
         return DOES_NOT_EXIST;
     }
 
@@ -277,9 +291,11 @@ uint64_t sl_remove (skiplist_t *sl, const void *key_data, uint32_t key_len) {
         }
     }
 
-    uint64_t value = item->value;
+    uint64_t val = item->val;
 
-    // Unlink <item> from the top down.
+    // Unlink <item> from <ll>. If we lose a race to another thread just back off. It is safe to leave the
+    // item partially unlinked for a later call (or some other thread) to physically unlink. By marking the
+    // item earlier, we logically removed it. 
     int level = item->top_level;
     while (level >= 0) {
         node_t *pred = preds[level];
@@ -288,16 +304,14 @@ uint64_t sl_remove (skiplist_t *sl, const void *key_data, uint32_t key_len) {
         node_t *other = NULL;
         if ((other = SYNC_CAS(&pred->next[level], item, STRIP_TAG(next))) != item) {
             TRACE("s3", "sl_remove: unlink failed; pred's link changed from %p to %p", item, other);
-            // By marking the item earlier, we logically removed it. It is safe to leave the item partially
-            // unlinked. Another thread will finish physically removing it from <sl>.
-            return value;
+            return val;
         }
         --level; 
     }
 
     // The thread that completes the unlink should free the memory.
-    nbd_defer_free(item); 
-    return value;
+    node_defer_free(item); 
+    return val;
 }
 
 void sl_print (skiplist_t *sl) {

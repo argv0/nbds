@@ -6,7 +6,7 @@
 # Makefile for building programs with whole-program interfile optimization
 ###################################################################################################
 OPT	   := -fwhole-program -combine -03# -DNDEBUG
-CFLAGS := -g -Wall -Werror -std=c99 -m64 -fnested-functions $(OPT)# -DENABLE_TRACE
+CFLAGS := -g -Wall -Werror -std=c99 -m64 $(OPT) #-DENABLE_TRACE
 INCS   := $(addprefix -I, include)
 TESTS  := output/ll_test output/sl_test output/ht_test output/rcu_test
 EXES   := $(TESTS)
@@ -33,11 +33,15 @@ $(addsuffix .log, $(TESTS)) : %.log : %
 ###################################################################################################
 # Rebuild an executable if any of it's source files need to be recompiled
 #
-# Note: Calculating dependancies as a side-effect of compilation is disabled. There is a bug in
+# Note: Calculating dependencies as a side-effect of compilation is disabled. There is a bug in
 # 		gcc. Compilation fails when -MM -MF is used and there is more than one source file.
-#		-MM -MT $@.d -MF $@.d
+#		Otherwise "-MM -MT $@.d -MF $@.d" should be part of the command line for the compile.
+#
+#       Also, when calculating dependencies -combine is removed from CFLAGS because of another bug 
+# 		in gcc. It chokes when -MM is used with -combine.
 ###################################################################################################
 $(EXES): output/% : output/%.d makefile
+	gcc $(CFLAGS:-combine:) $(INCS) -MM -MT $@ $($*_SRCS) > $@.d
 	gcc $(CFLAGS) $(INCS) -o $@ $($*_SRCS)
 
 ###################################################################################################
@@ -54,13 +58,10 @@ clean:
 
 .PHONY: clean test tags
 
+-include $(addsuffix .d, $(EXES))
+
 ###################################################################################################
-# Generate the dependencies lists for each executable
-#
-# Note: -combine is removed from CFLAGS because of a bug in gcc. The compiler chokes when
-# 		-MM is used with -combine.
+# Dummy rule for boostrapping dependency files
 ###################################################################################################
 $(addsuffix .d, $(EXES)) : output/%.d :
-	gcc $(CFLAGS:-combine:) $(INCS) -MM -MT $@ $($*_SRCS) > $@
-
--include $(addsuffix .d, $(EXES))
+	touch $@
