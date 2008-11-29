@@ -128,7 +128,7 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, const vo
                 TRACE("l2", "find_pred: found matching item %p in list, pred is %p", item, pred);
                 return TRUE;
             } 
-            TRACE("l2", "find_pred: found proper place for key %p in list, pred is %p. returning null", key_data, pred);
+            TRACE("l2", "find_pred: found proper place for key %p in list, pred is %p", key_data, pred);
             return FALSE;
         }
 
@@ -169,11 +169,11 @@ uint64_t ll_cas (list_t *ll, const void *key_data, uint32_t key_len, uint64_t ex
     TRACE("l1", "ll_cas: expectation %p new value %p", expectation, new_val);
     ASSERT((int64_t)new_val > 0);
 
-    node_t *pred, *old_item;
     do {
+        node_t *pred, *old_item;
         if (!find_pred(&pred, &old_item, ll, key_data, key_len, TRUE)) {
 
-            // There is no existing item in the list that matches the key. 
+            // There was not an item in the list that matches the key. 
             if (EXPECT_FALSE((int64_t)expectation > 0 || expectation == EXPECT_EXISTS)) {
                 TRACE("l1", "ll_cas: the expectation was not met, the list was not changed", 0, 0);
                 return DOES_NOT_EXIST; // failure
@@ -251,11 +251,10 @@ uint64_t ll_remove (list_t *ll, const void *key_data, uint32_t key_len) {
         }
     } while (next != old_next);
     TRACE("l2", "ll_remove: logically removed item %p", item, 0);
-    ASSERT(!IS_TAGGED(item->next));
+    ASSERT(IS_TAGGED(item->next));
 
     // This has to be an atomic swap in case another thread is updating the item while we are removing it. 
     uint64_t val = SYNC_SWAP(&item->val, DOES_NOT_EXIST); 
-
     TRACE("l2", "ll_remove: replaced item's val %p with DOES_NOT_EXIT", val, 0);
 
     // Unlink <item> from <ll>. If we lose a race to another thread just back off. It is safe to leave the
@@ -269,7 +268,7 @@ uint64_t ll_remove (list_t *ll, const void *key_data, uint32_t key_len) {
     } 
 
     // The thread that completes the unlink should free the memory.
-    node_defer_free((node_t *)item); 
+    node_defer_free(item); 
     TRACE("l1", "ll_remove: successfully unlinked item %p from the list", item, 0);
     return val;
 }

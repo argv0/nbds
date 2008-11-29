@@ -26,13 +26,13 @@ void *worker (void *arg) {
         char key_str[10];
         sprintf(key_str, "%llX", key);
         if (r & (1 << 8)) {
-            sl_add(sl_, key_str, strlen(key_str) + 1, 1);
+            sl_cas(sl_, key_str, strlen(key_str) + 1, EXPECT_WHATEVER, (r & 0xFF)+1);
         } else {
             sl_remove(sl_, key_str, strlen(key_str) + 1);
         }
 #else
         if (r & (1 << 8)) {
-            sl_add(sl_, (void *)key, -1, 1);
+            sl_cas(sl_, (void *)key, -1, EXPECT_WHATEVER, (r & 0xFF)+1);
         } else {
             sl_remove(sl_, (void *)key, -1);
         }

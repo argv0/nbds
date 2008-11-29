@@ -25,7 +25,7 @@ void     ll_print  (list_t *ll);
 typedef struct sl skiplist_t;
 skiplist_t * sl_alloc (void);
 uint64_t sl_lookup (skiplist_t *sl, const void *key_data, uint32_t key_len);
-uint64_t sl_add    (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_t value);
+uint64_t sl_cas    (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_t expected_val, uint64_t new_val);
 uint64_t sl_remove (skiplist_t *sl, const void *key_data, uint32_t key_len);
 void     sl_print  (skiplist_t *sl);
 
