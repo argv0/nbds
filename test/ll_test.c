@@ -5,13 +5,13 @@
 
 #include "common.h"
 #include "runtime.h"
-#include "struct.h"
+#include "map.h"
 
 #define NUM_ITERATIONS 10000000
 
 static volatile int wait_;
 static long num_threads_;
-static list_t *ll_;
+static map_t *map_;
 
 void *worker (void *arg) {
 
@@ -26,15 +26,15 @@ void *worker (void *arg) {
         char key_str[10];
         sprintf(key_str, "%llX", key);
         if (r & (1 << 8)) {
-            ll_cas(ll_, key_str, strlen(key_str) + 1, EXPECT_WHATEVER, 1);
+            map_set(map_, key_str, strlen(key_str) + 1, 1);
         } else {
-            ll_remove(ll_, key_str, strlen(key_str) + 1);
+            map_remove(map_, key_str, strlen(key_str) + 1);
         }
 #else
         if (r & (1 << 8)) {
-            ll_cas(ll_, (void *)key, -1, EXPECT_WHATEVER, 1);
+            map_set(map_, (void *)key, -1, 1);
         } else {
-            ll_remove(ll_, (void *)key, -1);
+            map_remove(map_, (void *)key, -1);
         }
 #endif
 
@@ -75,7 +75,7 @@ int main (int argc, char **argv) {
         }
     }
 
-    ll_ = ll_alloc();
+    map_ = map_alloc(MAP_TYPE_LIST);
 
     struct timeval tv1, tv2;
     gettimeofday(&tv1, NULL);
@@ -93,7 +93,7 @@ int main (int argc, char **argv) {
 
     gettimeofday(&tv2, NULL);
     int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
-    ll_print(ll_);
+    map_print(map_);
     printf("Th:%ld Time:%dms\n", num_threads_, ms);
 
     return 0;

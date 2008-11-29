@@ -10,15 +10,15 @@
  * www.cl.cam.ac.uk/techreports/UCAM-CL-TR-579.pdf
  *
  * This code is written for the x86 memory-model. The algorithim depends on certain stores and
- * loads being ordered. Be careful, this code probably won't work correctly on platforms with
- * weaker memory models if you don't add memory barriers in the right places.
+ * loads being ordered. Be careful, this code won't work correctly on platforms with weaker memory
+ * models if you don't add memory barriers in the right places.
  */
 #include <stdio.h>
 #include <string.h>
 
 #include "common.h"
 #include "runtime.h"
-#include "struct.h"
+#include "mlocal.h"
 #include "nstring.h"
 #include "mem.h"
 #include "tls.h"
@@ -50,7 +50,7 @@ static int random_level (void) {
     return n;
 }
 
-node_t *node_alloc (int level, const void *key_data, uint32_t key_len, uint64_t val) {
+static node_t *node_alloc (int level, const void *key_data, uint32_t key_len, uint64_t val) {
     assert(level >= 0 && level <= MAX_LEVEL);
     size_t sz = sizeof(node_t) + (level + 1) * sizeof(node_t *);
     node_t *item = (node_t *)nbd_malloc(sz);
@@ -83,6 +83,9 @@ skiplist_t *sl_alloc (void) {
     sl->head = node_alloc(MAX_LEVEL, " ", 0, 0);
     memset(sl->head->next, 0, (MAX_LEVEL+1) * sizeof(skiplist_t *));
     return sl;
+}
+
+void ll_free (list_t *ll) {
 }
 
 static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl, const void *key_data, uint32_t key_len, int help_remove) {
@@ -237,12 +240,12 @@ uint64_t sl_cas (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_
         if (old_item == NULL) {
 
             // There was not an item in the skiplist that matches the key. 
-            if (EXPECT_FALSE((int64_t)expectation > 0 || expectation == EXPECT_EXISTS)) {
+            if (EXPECT_FALSE((int64_t)expectation > 0 || expectation == CAS_EXPECT_EXISTS)) {
                 TRACE("l1", "sl_cas: the expectation was not met, the skiplist was not changed", 0, 0);
                 return DOES_NOT_EXIST; // failure
             }
 
-            ASSERT(expectation == EXPECT_DOES_NOT_EXIST || expectation == EXPECT_WHATEVER);
+            ASSERT(expectation == CAS_EXPECT_DOES_NOT_EXIST || expectation == CAS_EXPECT_WHATEVER);
 
             // First insert <new_item> into the bottom level.
             TRACE("s3", "sl_cas: attempting to insert item between %p and %p", preds[0], nexts[0]);
@@ -271,7 +274,7 @@ uint64_t sl_cas (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_
                 break; // retry
             }
 
-            if (EXPECT_FALSE(expectation == EXPECT_DOES_NOT_EXIST)) {
+            if (EXPECT_FALSE(expectation == CAS_EXPECT_DOES_NOT_EXIST)) {
                 TRACE("s1", "sl_cas: found an item %p in the skiplist that matched the key. the expectation was "
                         "not met, the skiplist was not changed", old_item, old_item_val);
                 return old_item_val; // failure

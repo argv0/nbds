@@ -36,6 +36,11 @@
 #define IS_TAGGED(v) ((uint64_t)(v) &  TAG)
 #define STRIP_TAG(v) ((uint64_t)(v) & ~TAG)
 
+#define DOES_NOT_EXIST 0
+#define ERROR_INVALID_OPTION (-1)
+#define ERROR_INVALID_ARGUMENT (-2)
+#define ERROR_UNSUPPORTED_FEATURE (-3)
+
 typedef unsigned long long uint64_t;
 typedef unsigned int       uint32_t;
 typedef unsigned char      uint8_t;

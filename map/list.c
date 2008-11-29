@@ -9,7 +9,7 @@
 #include <string.h>
 
 #include "common.h"
-#include "struct.h"
+#include "mlocal.h"
 #include "nstring.h"
 #include "mem.h"
 
@@ -53,6 +53,9 @@ list_t *ll_alloc (void) {
     ll->head = node_alloc(" ", 0, 0);
     ll->head->next = NULL;
     return ll;
+}
+
+void ll_free (list_t *ll) {
 }
 
 static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, const void *key_data, uint32_t key_len, int help_remove) {
@@ -174,12 +177,12 @@ uint64_t ll_cas (list_t *ll, const void *key_data, uint32_t key_len, uint64_t ex
         if (!find_pred(&pred, &old_item, ll, key_data, key_len, TRUE)) {
 
             // There was not an item in the list that matches the key. 
-            if (EXPECT_FALSE((int64_t)expectation > 0 || expectation == EXPECT_EXISTS)) {
+            if (EXPECT_FALSE((int64_t)expectation > 0 || expectation == CAS_EXPECT_EXISTS)) {
                 TRACE("l1", "ll_cas: the expectation was not met, the list was not changed", 0, 0);
                 return DOES_NOT_EXIST; // failure
             }
 
-            ASSERT(expectation == EXPECT_DOES_NOT_EXIST || expectation == EXPECT_WHATEVER);
+            ASSERT(expectation == CAS_EXPECT_DOES_NOT_EXIST || expectation == CAS_EXPECT_WHATEVER);
 
             // Create a new item and insert it into the list.
             TRACE("l2", "ll_cas: attempting to insert item between %p and %p", pred, pred->next);
@@ -206,7 +209,7 @@ uint64_t ll_cas (list_t *ll, const void *key_data, uint32_t key_len, uint64_t ex
                 break; // retry
             }
 
-            if (EXPECT_FALSE(expectation == EXPECT_DOES_NOT_EXIST)) {
+            if (EXPECT_FALSE(expectation == CAS_EXPECT_DOES_NOT_EXIST)) {
                 TRACE("l1", "ll_cas: found an item %p in the list that matched the key. the expectation was "
                         "not met, the list was not changed", old_item, old_item_val);
                 return old_item_val; // failure

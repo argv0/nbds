@@ -11,12 +11,13 @@ TESTS  := output/ll_test output/sl_test output/ht_test output/rcu_test
 EXES   := $(TESTS)
 
 RUNTIME_SRCS  := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c
-TEST_SRCS     := $(RUNTIME_SRCS)
+MAP_SRCS      := map/map.c map/hashtable.c map/list.c map/skiplist.c map/nstring.c 
+TEST_SRCS     := $(RUNTIME_SRCS) $(MAP_SRCS)
 rcu_test_SRCS := $(TEST_SRCS) test/rcu_test.c
-txn_test_SRCS := $(TEST_SRCS) struct/hashtable.c txn/txn.c
-ll_test_SRCS  := $(TEST_SRCS) struct/list.c test/ll_test.c struct/nstring.c
-sl_test_SRCS  := $(TEST_SRCS) struct/skiplist.c test/sl_test.c struct/nstring.c
-ht_test_SRCS  := $(TEST_SRCS) struct/hashtable.c test/ht_test.c test/CuTest.c struct/nstring.c
+txn_test_SRCS := $(TEST_SRCS) txn/txn.c 
+ll_test_SRCS  := $(TEST_SRCS) test/ll_test.c 
+sl_test_SRCS  := $(TEST_SRCS) test/sl_test.c
+ht_test_SRCS  := $(TEST_SRCS) test/ht_test.c test/CuTest.c
 
 tests: $(TESTS)
 
