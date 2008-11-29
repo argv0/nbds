@@ -23,6 +23,7 @@ typedef struct fifo {
     void *x[0];
 } fifo_t;
 
+#define MOD_SCALE(x, b) ((x) & MASK(b))
 static uint64_t rcu_[MAX_NUM_THREADS][MAX_NUM_THREADS] = {};
 static uint64_t rcu_last_posted_[MAX_NUM_THREADS][MAX_NUM_THREADS] = {};
 static fifo_t *pending_[MAX_NUM_THREADS] = {};
@@ -37,38 +38,12 @@ static fifo_t *fifo_alloc(int scale) {
     return q;
 }
 
-static uint32_t fifo_index (fifo_t *q, uint32_t i) {
-    return i & MASK(q->scale);
-}
-
-static void fifo_enqueue (fifo_t *q, void *x) {
-    assert(fifo_index(q, q->head + 1) != fifo_index(q, q->tail));
-    uint32_t i = fifo_index(q, q->head++);
-    q->x[i] = x;
-}
-
-static void *fifo_dequeue (fifo_t *q) {
-    uint32_t i = fifo_index(q, q->tail++);
-    return q->x[i];
-}
-
 void rcu_thread_init (int id) {
     assert(id < MAX_NUM_THREADS);
     if (pending_[id] == NULL) {
         pending_[id] = fifo_alloc(RCU_QUEUE_SCALE);
         SYNC_ADD(&num_threads_, 1);
     }
-}
-
-static void rcu_post (uint64_t x) {
-    LOCALIZE_THREAD_LOCAL(tid_, int);
-    if (x - rcu_last_posted_[tid_][tid_] < RCU_POST_THRESHOLD)
-        return;
-
-    int next_thread_id = (tid_ + 1) % num_threads_;
-
-    TRACE("r0", "rcu_post: %llu", x, 0);
-    rcu_[next_thread_id][tid_] = rcu_last_posted_[tid_][tid_] = x;
 }
 
 void rcu_update (void) {
@@ -90,13 +65,23 @@ void rcu_update (void) {
 
     // free
     while (pending_[tid_]->tail != rcu_[tid_][tid_]) {
-        nbd_free(fifo_dequeue(pending_[tid_]));
+        fifo_t *q = pending_[tid_];
+        uint32_t i = MOD_SCALE(q->tail++, q->scale);
+        nbd_free(q->x[i]);
     }
 }
 
 void nbd_defer_free (void *x) {
     LOCALIZE_THREAD_LOCAL(tid_, int);
-    fifo_enqueue(pending_[tid_], x);
+    fifo_t *q = pending_[tid_];
+    assert(MOD_SCALE(q->head + 1, q->scale) != MOD_SCALE(q->tail, q->scale));
+    uint32_t i = MOD_SCALE(q->head++, q->scale);
+    q->x[i] = x;
     TRACE("r0", "nbd_defer_free: put %p on queue at position %llu", x, pending_[tid_]->head);
-    rcu_post(pending_[tid_]->head);
+
+    if (pending_[tid_]->head - rcu_last_posted_[tid_][tid_] < RCU_POST_THRESHOLD)
+        return;
+    TRACE("r0", "nbd_defer_free: posting %llu", pending_[tid_]->head, 0);
+    int next_thread_id = (tid_ + 1) % num_threads_;
+    rcu_[next_thread_id][tid_] = rcu_last_posted_[tid_][tid_] = pending_[tid_]->head;
 }

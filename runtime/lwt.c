@@ -119,8 +119,7 @@ void lwt_dump (const char *file_name)
 }
 
 void lwt_trace_i (const char *format, size_t value1, size_t value2) {
-    if (halt_)
-        return;
+    while (halt_) {}
     LOCALIZE_THREAD_LOCAL(tid_, int);
     lwt_buffer_t *tb = lwt_buf_[tid_];
     if (tb != NULL) {

@@ -190,7 +190,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
 
 // Fast find that does not help unlink partially removed nodes and does not return the node's predecessors.
 uint64_t sl_lookup (skiplist_t *sl, const void *key_data, uint32_t key_len) {
-    TRACE("s3", "sl_lookup: searching for key %p in skiplist %p", key, sl);
+    TRACE("s3", "sl_lookup: searching for key %p in skiplist %p", key_data, sl);
     node_t *item = find_preds(NULL, NULL, 0, sl, key_data, key_len, FALSE);
 
     // If we found an <item> matching the <key> return its value.
@@ -337,7 +337,7 @@ void sl_print (skiplist_t *sl) {
         if (IS_TAGGED(item->key)) {
             printf("%s%p:%llx ", is_marked ? "*" : "", item, STRIP_TAG(item->key));
         } else {
-            printf("%s%p:%s ", is_marked ? "*" : "", item, (char *)ns_data(item->key));
+            printf("%s%p:%s ", is_marked ? "*" : "", item, (char *)item->key->data);
         }
         if (item != sl->head) {
             printf("[%d]", item->top_level);

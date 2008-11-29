@@ -1,11 +1,10 @@
 ###################################################################################################
 # Written by Josh Dybnis and released to the public domain, as explained at
 # http://creativecommons.org/licenses/publicdomain
-#
 ###################################################################################################
 # Makefile for building programs with whole-program interfile optimization
 ###################################################################################################
-OPT	   := -fwhole-program -combine -03# -DNDEBUG
+OPT	   := -fwhole-program -combine -03 #-DNDEBUG
 CFLAGS := -g -Wall -Werror -std=c99 -m64 $(OPT) #-DENABLE_TRACE
 INCS   := $(addprefix -I, include)
 TESTS  := output/ll_test output/sl_test output/ht_test output/rcu_test
@@ -22,7 +21,7 @@ ht_test_SRCS  := $(TEST_SRCS) struct/hashtable.c test/ht_test.c test/CuTest.c st
 tests: $(TESTS)
 
 ###################################################################################################
-# Run the tests
+# build and run tests
 ###################################################################################################
 test: $(addsuffix .log, $(TESTS))
 	@echo > /dev/null
@@ -45,7 +44,7 @@ $(EXES): output/% : output/%.d makefile
 	gcc $(CFLAGS) $(INCS) -o $@ $($*_SRCS)
 
 ###################################################################################################
-# Build tags file for vi
+# tags file for vi
 ###################################################################################################
 tags:
 	ctags -R .
@@ -56,12 +55,11 @@ tags:
 clean:
 	rm -rfv output/*
 
-.PHONY: clean test tags
+###################################################################################################
+# dummy rule for boostrapping dependency files
+###################################################################################################
+$(addsuffix .d, $(EXES)) : output/%.d :
 
 -include $(addsuffix .d, $(EXES))
 
-###################################################################################################
-# Dummy rule for boostrapping dependency files
-###################################################################################################
-$(addsuffix .d, $(EXES)) : output/%.d :
-	touch $@
+.PHONY: clean test tags

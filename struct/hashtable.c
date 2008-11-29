@@ -94,14 +94,14 @@ static volatile entry_t *hti_lookup (hashtable_i_t *hti, uint32_t key_hash, cons
 
             uint64_t e_key = e->key;
             if (e_key == DOES_NOT_EXIST) {
-                TRACE("h1", "hti_lookup: entry %p for key \"%s\" is empty", e, ns_data(GET_PTR(e_key)));
+                TRACE("h1", "hti_lookup: entry %p for key \"%s\" is empty", e, GET_PTR(e_key)->data);
                 *is_empty = 1; // indicate an empty so the caller avoids an expensive ht_key_equals
                 return e;
             }
 
             if (ht_key_equals(e_key, key_hash, key_data, key_len)) {
-                TRACE("h1", "hti_lookup: entry %p key \"%s\"", e, ns_data(GET_PTR(e_key)));
-                TRACE("h2", "hti_lookup: entry key len %llu, value %p", ns_len(GET_PTR(e_key)), e->value);
+                TRACE("h1", "hti_lookup: entry %p key \"%s\"", e, GET_PTR(e_key)->data);
+                TRACE("h2", "hti_lookup: entry key len %llu, value %p", GET_PTR(e_key)->len, e->value);
                 return e;
             }
         }
@@ -226,11 +226,11 @@ static int hti_copy_entry (hashtable_i_t *ht1, volatile entry_t *ht1_e, uint32_t
     // We use 0 to indicate that <key_hash> isn't initiallized. Occasionally the <key_hash> will
     // really be 0 and we will waste time recomputing it. That is rare enough that it is OK. 
     if (key_hash == 0) { 
-        key_hash = murmur32(ns_data(key_string), ns_len(key_string));
+        key_hash = murmur32(key_string->data, key_string->len);
     }
 
     int is_empty;
-    volatile entry_t *ht2_e = hti_lookup(ht2, key_hash, ns_data(key_string), ns_len(key_string), &is_empty);
+    volatile entry_t *ht2_e = hti_lookup(ht2, key_hash, key_string->data, key_string->len, &is_empty);
     TRACE("h0", "hti_copy_entry: copy entry %p to entry %p", ht1_e, ht2_e);
 
     // it is possible that there is not any room in the new table either
@@ -266,7 +266,7 @@ static int hti_copy_entry (hashtable_i_t *ht1, volatile entry_t *ht1_e, uint32_t
 
     // Update the count if we were the one that completed the copy.
     if (old_ht2_e_value == DOES_NOT_EXIST) {
-        TRACE("h0", "hti_copy_entry: key \"%s\" value %p copied to new entry", ns_data(key_string), value);
+        TRACE("h0", "hti_copy_entry: key \"%s\" value %p copied to new entry", key_string->data, value);
         SYNC_ADD(&ht1->count, -1);
         SYNC_ADD(&ht2->count, 1);
         return TRUE;
@@ -337,7 +337,7 @@ static uint64_t hti_compare_and_set (hashtable_i_t *hti, uint32_t key_hash, cons
         TRACE("h2", "hti_compare_and_set: installed key %p in entry %p", key, e);
     }
 
-    TRACE("h0", "hti_compare_and_set: entry for key \"%s\" is %p", ns_data(GET_PTR(e->key)), e);
+    TRACE("h0", "hti_compare_and_set: entry for key \"%s\" is %p", GET_PTR(e->key)->data, e);
 
     // If the entry is in the middle of a copy, the copy must be completed first.
     uint64_t e_value = e->value;

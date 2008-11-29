@@ -46,7 +46,7 @@ void *worker (void *arg) {
 
 int main (int argc, char **argv) {
     nbd_init();
-    lwt_set_trace_level("l3");
+    //lwt_set_trace_level("l3");
 
     char* program_name = argv[0];
     pthread_t thread[MAX_NUM_THREADS];

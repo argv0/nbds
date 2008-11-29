@@ -13,6 +13,12 @@
 #define TRACE(flag, format, v1, v2) lwt_trace(flag, format, (size_t)(v1), (size_t)(v2))
 #endif
 
+#ifdef NDEBUG
+#define ASSERT(x) 
+#else
+#define ASSERT(x) if (!(x)) { lwt_halt(); assert(!#x); }
+#endif
+
 // Dump trace records to <file_name>. The file should be post-processed with "sort" before viewing.
 void lwt_dump (const char *file_name) __attribute__ ((externally_visible));
 
