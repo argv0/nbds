@@ -26,13 +26,13 @@ void *worker (void *arg) {
         char key_str[10];
         sprintf(key_str, "%llX", key);
         if (r & (1 << 8)) {
-            map_set(map_, key_str, strlen(key_str) + 1, (r & 0xFF)+1);
+            map_set(map_, key_str, strlen(key_str) + 1, 1);
         } else {
             map_remove(map_, key_str, strlen(key_str) + 1);
         }
 #else
         if (r & (1 << 8)) {
-            map_set(map_, (void *)key, -1, (r & 0xFF)+1);
+            map_set(map_, (void *)key, -1, 1);
         } else {
             map_remove(map_, (void *)key, -1);
         }
@@ -46,7 +46,7 @@ void *worker (void *arg) {
 
 int main (int argc, char **argv) {
     nbd_init();
-    //lwt_set_trace_level("s3");
+    //lwt_set_trace_level("l3");
 
     char* program_name = argv[0];
     pthread_t thread[MAX_NUM_THREADS];
@@ -75,26 +75,30 @@ int main (int argc, char **argv) {
         }
     }
 
-    map_ = map_alloc(MAP_TYPE_SKIPLIST);
+    map_type_t map_types[] = { MAP_TYPE_LIST, MAP_TYPE_SKIPLIST, MAP_TYPE_HASHTABLE };
+    for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {
+        map_ = map_alloc(map_types[i]);
 
-    struct timeval tv1, tv2;
-    gettimeofday(&tv1, NULL);
+        struct timeval tv1, tv2;
+        gettimeofday(&tv1, NULL);
 
-    wait_ = num_threads_;
+        wait_ = num_threads_;
 
-    for (int i = 0; i < num_threads_; ++i) {
-        int rc = nbd_thread_create(thread + i, i, worker, (void*)(size_t)i);
-        if (rc != 0) { perror("pthread_create"); return rc; }
+        for (int i = 0; i < num_threads_; ++i) {
+            int rc = nbd_thread_create(thread + i, i, worker, (void*)(size_t)i);
+            if (rc != 0) { perror("pthread_create"); return rc; }
+        }
+
+        for (int i = 0; i < num_threads_; ++i) {
+            pthread_join(thread[i], NULL);
+        }
+
+        gettimeofday(&tv2, NULL);
+        int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
+        map_print(map_);
+        printf("Th:%ld Time:%dms\n", num_threads_, ms);
+        fflush(stdout);
     }
-
-    for (int i = 0; i < num_threads_; ++i) {
-        pthread_join(thread[i], NULL);
-    }
-
-    gettimeofday(&tv2, NULL);
-    int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
-    map_print(map_);
-    printf("Th:%ld Time:%dms\n", num_threads_, ms);
 
     return 0;
 }

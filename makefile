@@ -7,17 +7,16 @@
 OPT	   := -fwhole-program -combine -03 #-DNDEBUG
 CFLAGS := -g -Wall -Werror -std=c99 -m64 $(OPT) #-DENABLE_TRACE
 INCS   := $(addprefix -I, include)
-TESTS  := output/ll_test output/sl_test output/ht_test output/rcu_test
+TESTS  := output/map_test1 output/map_test2 output/rcu_test
 EXES   := $(TESTS)
 
-RUNTIME_SRCS  := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c
-MAP_SRCS      := map/map.c map/nstring.c 
-TEST_SRCS     := $(RUNTIME_SRCS) $(MAP_SRCS)
-rcu_test_SRCS := $(TEST_SRCS) test/rcu_test.c
-txn_test_SRCS := $(TEST_SRCS) txn/txn.c map/hashtable.c 
-ll_test_SRCS  := $(TEST_SRCS) test/ll_test.c map/list.c 
-sl_test_SRCS  := $(TEST_SRCS) test/sl_test.c map/skiplist.c 
-ht_test_SRCS  := $(TEST_SRCS) test/ht_test.c map/hashtable.c test/CuTest.c
+RUNTIME_SRCS := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c
+MAP_SRCS     := map/map.c map/nstring.c map/list.c map/skiplist.c map/hashtable.c
+
+rcu_test_SRCS  := $(RUNTIME_SRCS) test/rcu_test.c
+txn_test_SRCS  := $(RUNTIME_SRCS) $(MAP_SRCS) txn/txn.c
+map_test1_SRCS := $(RUNTIME_SRCS) $(MAP_SRCS) test/map_test1.c 
+map_test2_SRCS := $(RUNTIME_SRCS) $(MAP_SRCS) test/map_test2.c test/CuTest.c
 
 tests: $(TESTS)
 

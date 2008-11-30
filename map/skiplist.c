@@ -340,7 +340,7 @@ uint64_t sl_cas (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_
                 // There in no need to continue linking in the item if another thread removed it.
                 node_t *old_next = ((volatile node_t *)new_item)->next[level];
                 if (IS_TAGGED(old_next))
-                    return new_val;
+                    return DOES_NOT_EXIST; // success
 
                 // Use a CAS so we do not inadvertantly stomp on a mark another thread placed on the item.
                 if (old_next == next || SYNC_CAS(&new_item->next[level], old_next, next) == old_next)
@@ -348,7 +348,7 @@ uint64_t sl_cas (skiplist_t *sl, const void *key_data, uint32_t key_len, uint64_
             } while (1);
         } while (1);
     }
-    return new_val;
+    return DOES_NOT_EXIST; // success
 }
 
 uint64_t sl_remove (skiplist_t *sl, const void *key_data, uint32_t key_len) {
@@ -379,8 +379,9 @@ uint64_t sl_remove (skiplist_t *sl, const void *key_data, uint32_t key_len) {
                 TRACE("s2", "sl_remove: lost race -- %p is already marked for removal by another thread", item, 0);
                 if (level == 0)
                     return DOES_NOT_EXIST;
+                break;
             }
-        } while (!IS_TAGGED(old_next) || next != old_next);
+        } while (next != old_next);
     }
 
     // This has to be an atomic swap in case another thread is updating the item while we are removing it. 

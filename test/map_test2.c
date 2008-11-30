@@ -20,10 +20,12 @@ typedef struct worker_data {
     int *wait;
 } worker_data_t;
 
+static map_type_t map_type_;
+
 // Test some basic stuff; add a few keys, remove a few keys
 void basic_test (CuTest* tc) {
 
-    map_t *ht = map_alloc(MAP_TYPE_HASHTABLE);
+    map_t *ht = map_alloc(map_type_);
 
     ASSERT_EQUAL( 0,              map_count(ht)            );
     ASSERT_EQUAL( DOES_NOT_EXIST, map_add(ht,"a",2,10)     );
@@ -83,7 +85,7 @@ void *simple_worker (void *arg) {
     map_t *ht = wd->ht;
     CuTest* tc = wd->tc;
     uint64_t d = wd->id;
-    int iters = 1000000;
+    int iters = map_type_ == MAP_TYPE_LIST ? 100 : 1000000;
 
     SYNC_ADD(wd->wait, -1);
     do { } while (*((volatile worker_data_t *)wd)->wait); // wait for all workers to be ready
@@ -94,14 +96,15 @@ void *simple_worker (void *arg) {
             sprintf(key, "k%u", i); 
             TRACE("t0", "test map_add() iteration (%llu, %llu)", j, i);
             CuAssertIntEquals_Msg(tc, key, DOES_NOT_EXIST, map_add(ht, key, strlen(key)+1, d+1) );
+            rcu_update();
         }
         for (int i = d; i < iters; i+=2) {
             char key[10];
             sprintf(key, "k%u", i); 
             TRACE("t0", "test map_remove() iteration (%llu, %llu)", j, i);
             CuAssertIntEquals_Msg(tc, key, d+1, map_remove(ht, key, strlen(key)+1) );
+            rcu_update();
         }
-        rcu_update();
     }
     return NULL;
 }
@@ -112,7 +115,7 @@ void simple_add_remove (CuTest* tc) {
     pthread_t thread[2];
     worker_data_t wd[2];
     int wait = 2;
-    map_t *ht = map_alloc(MAP_TYPE_HASHTABLE);
+    map_t *ht = map_alloc(map_type_);
 
     // In 2 threads, add & remove even & odd elements concurrently
     int i;
@@ -152,17 +155,22 @@ int main (void) {
     nbd_init();
     //lwt_set_trace_level("h0");
 
-    // Create and run test suite
-	CuString *output = CuStringNew();
-	CuSuite* suite = CuSuiteNew();
+    map_type_t map_types[] = { MAP_TYPE_LIST, MAP_TYPE_SKIPLIST, MAP_TYPE_HASHTABLE };
+    for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {
+        map_type_ = map_types[i];
 
-    SUITE_ADD_TEST(suite, basic_test);
-    SUITE_ADD_TEST(suite, simple_add_remove);
+        // Create and run test suite
+        CuString *output = CuStringNew();
+        CuSuite* suite = CuSuiteNew();
 
-	CuSuiteRun(suite);
-	CuSuiteSummary(suite, output);
-	CuSuiteDetails(suite, output);
-	printf("%s\n", output->buffer);
+        SUITE_ADD_TEST(suite, basic_test);
+        SUITE_ADD_TEST(suite, simple_add_remove);
+
+        CuSuiteRun(suite);
+        CuSuiteSummary(suite, output);
+        CuSuiteDetails(suite, output);
+        printf("%s\n", output->buffer);
+    }
 
     return 0;
 }
