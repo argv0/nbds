@@ -7,4 +7,4 @@
 - make interfaces for all data structures consistent 
 + make list and skiplist use string keys
 + optimize integer keys
-- sl_free() ll_free() ht_print()
+- ht_print()

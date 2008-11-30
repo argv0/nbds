@@ -13,6 +13,7 @@
  * loads being ordered. Be careful, this code won't work correctly on platforms with weaker memory
  * models if you don't add memory barriers in the right places.
  */
+
 #include <stdio.h>
 #include <string.h>
 
@@ -37,6 +38,13 @@ typedef struct node {
 struct sl {
     node_t *head;
 };
+
+static const map_impl_t sl_map_impl = { 
+    (map_alloc_t)sl_alloc, (map_cas_t)sl_cas, (map_get_t)sl_lookup, (map_remove_t)sl_remove, 
+    (map_count_t)sl_count, (map_print_t)sl_print, (map_free_t)sl_free
+};
+
+const map_impl_t *MAP_TYPE_SKIPLIST = &sl_map_impl;
 
 static int random_level (void) {
     unsigned r = nbd_rand();
@@ -85,7 +93,23 @@ skiplist_t *sl_alloc (void) {
     return sl;
 }
 
-void ll_free (list_t *ll) {
+void sl_free (skiplist_t *sl) {
+    node_t *item = sl->head->next[0];
+    while (item) {
+        node_t *next = (node_t *)STRIP_TAG(item->next[0]);
+        nbd_free(item);
+        item = next;
+    }
+}
+
+uint64_t sl_count (skiplist_t *sl) {
+    uint64_t count = 0;
+    node_t *item = sl->head->next[0];
+    while (item) {
+        count++;
+        item = (node_t *)STRIP_TAG(item->next[0]);
+    }
+    return count;
 }
 
 static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl, const void *key_data, uint32_t key_len, int help_remove) {

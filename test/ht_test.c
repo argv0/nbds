@@ -25,51 +25,52 @@ void basic_test (CuTest* tc) {
 
     map_t *ht = map_alloc(MAP_TYPE_HASHTABLE);
 
-    ASSERT_EQUAL( 0,              map_stat(ht, MAP_STAT_COUNT) );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(ht,"a",2,10)         );
-    ASSERT_EQUAL( 1,              map_stat(ht, MAP_STAT_COUNT) );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(ht,"b",2,20)         );
-    ASSERT_EQUAL( 2,              map_stat(ht, MAP_STAT_COUNT) );
-    ASSERT_EQUAL( 20,             map_get(ht,"b",2)            );
-    ASSERT_EQUAL( 10,             map_set(ht,"a",2,11)         );
-    ASSERT_EQUAL( 20,             map_set(ht,"b",2,21)         );
-    ASSERT_EQUAL( 2,              map_stat(ht, MAP_STAT_COUNT) );
-    ASSERT_EQUAL( 21,             map_add(ht,"b",2,22)         );
-    ASSERT_EQUAL( 11,             map_remove(ht,"a",2)         );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"a",2)            );
-    ASSERT_EQUAL( 1,              map_stat(ht, MAP_STAT_COUNT) );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(ht,"a",2)         );
-    ASSERT_EQUAL( 21,             map_remove(ht,"b",2)         );
-    ASSERT_EQUAL( 0,              map_stat(ht, MAP_STAT_COUNT) );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(ht,"b",2)         );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(ht,"c",2)         );
-    ASSERT_EQUAL( 0,              map_stat(ht, MAP_STAT_COUNT) );
+    ASSERT_EQUAL( 0,              map_count(ht)            );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(ht,"a",2,10)     );
+    ASSERT_EQUAL( 1,              map_count(ht)            );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(ht,"b",2,20)     );
+    ASSERT_EQUAL( 2,              map_count(ht)            );
+    ASSERT_EQUAL( 20,             map_get(ht,"b",2)        );
+    ASSERT_EQUAL( 10,             map_set(ht,"a",2,11)     );
+    ASSERT_EQUAL( 20,             map_set(ht,"b",2,21)     );
+    ASSERT_EQUAL( 2,              map_count(ht)            );
+    ASSERT_EQUAL( 21,             map_add(ht,"b",2,22)     );
+    ASSERT_EQUAL( 11,             map_remove(ht,"a",2)     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"a",2)        );
+    ASSERT_EQUAL( 1,              map_count(ht)            );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(ht,"a",2)     );
+    ASSERT_EQUAL( 21,             map_remove(ht,"b",2)     );
+    ASSERT_EQUAL( 0,              map_count(ht)            );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(ht,"b",2)     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(ht,"c",2)     );
+    ASSERT_EQUAL( 0,              map_count(ht)            );
     
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(ht,"d",2,40)         );
-    ASSERT_EQUAL( 40,             map_get(ht,"d",2)            );
-    ASSERT_EQUAL( 1,              map_stat(ht, MAP_STAT_COUNT) );
-    ASSERT_EQUAL( 40,             map_remove(ht,"d",2)         );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"d",2)            );
-    ASSERT_EQUAL( 0,              map_stat(ht, MAP_STAT_COUNT) );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(ht,"d",2,40)     );
+    ASSERT_EQUAL( 40,             map_get(ht,"d",2)        );
+    ASSERT_EQUAL( 1,              map_count(ht)            );
+    ASSERT_EQUAL( 40,             map_remove(ht,"d",2)     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"d",2)        );
+    ASSERT_EQUAL( 0,              map_count(ht)            );
 
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(ht,"d",2,10)     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"d",2)            );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_set(ht,"d",2,40)         );
-    ASSERT_EQUAL( 40,             map_replace(ht,"d",2,41)     );
-    ASSERT_EQUAL( 41,             map_get(ht,"d",2)            );
-    ASSERT_EQUAL( 41,             map_remove(ht,"d",2)         );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"d",2)            );
-    ASSERT_EQUAL( 0,              map_stat(ht, MAP_STAT_COUNT) );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(ht,"d",2,10) );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"d",2)        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_set(ht,"d",2,40)     );
+    ASSERT_EQUAL( 40,             map_replace(ht,"d",2,41) );
+    ASSERT_EQUAL( 41,             map_get(ht,"d",2)        );
+    ASSERT_EQUAL( 41,             map_remove(ht,"d",2)     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"d",2)        );
+    ASSERT_EQUAL( 0,              map_count(ht)            );
 
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(ht,"b",2,20)     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"b",2)            );
-    // In the end, all members should be removed
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_set(ht,"b",2,20)         );
-    ASSERT_EQUAL( 20,             map_replace(ht,"b",2,21)     );
-    ASSERT_EQUAL( 21,             map_get(ht,"b",2)            );
-    ASSERT_EQUAL( 21,             map_remove(ht,"b",2)         );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"b",2)            );
-    ASSERT_EQUAL( 0,              map_stat(ht, MAP_STAT_COUNT) );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(ht,"b",2,20) );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"b",2)        );
+
+    // In the end, all entries should be removed
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_set(ht,"b",2,20)     );
+    ASSERT_EQUAL( 20,             map_replace(ht,"b",2,21) );
+    ASSERT_EQUAL( 21,             map_get(ht,"b",2)        );
+    ASSERT_EQUAL( 21,             map_remove(ht,"b",2)     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(ht,"b",2)        );
+    ASSERT_EQUAL( 0,              map_count(ht)            );
 
     map_free(ht);
 
@@ -128,7 +129,7 @@ void simple_add_remove (CuTest* tc) {
     }
 
     // In the end, all members should be removed
-    ASSERT_EQUAL( 0, map_stat(ht, MAP_STAT_COUNT) );
+    ASSERT_EQUAL( 0, map_count(ht) );
 
     // In a quiecent state; it is safe to free.
     map_free(ht);

@@ -41,6 +41,13 @@ struct ht {
     hashtable_i_t *hti;
 };
 
+static const map_impl_t ht_map_impl = { 
+    (map_alloc_t)ht_alloc, (map_cas_t)ht_cas, (map_get_t)ht_get, (map_remove_t)ht_remove, 
+    (map_count_t)ht_count, (map_print_t)ht_print, (map_free_t)ht_free
+};
+
+const map_impl_t *MAP_TYPE_HASHTABLE = &ht_map_impl;
+
 static const uint64_t COPIED_VALUE           = -1;
 static const uint64_t TOMBSTONE              = STRIP_TAG(-1);
 

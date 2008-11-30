@@ -5,6 +5,7 @@
  * Harris-Michael lock-free list-based set
  * http://www.research.ibm.com/people/m/michael/spaa-2002.pdf
  */
+
 #include <stdio.h>
 #include <string.h>
 
@@ -22,6 +23,13 @@ typedef struct node {
 struct ll {
     node_t *head;
 };
+
+static const map_impl_t ll_map_impl = { 
+    (map_alloc_t)ll_alloc, (map_cas_t)ll_cas, (map_get_t)ll_lookup, (map_remove_t)ll_remove, 
+    (map_count_t)ll_count, (map_print_t)ll_print, (map_free_t)ll_free
+};
+
+const map_impl_t *MAP_TYPE_LIST = &ll_map_impl;
 
 static node_t *node_alloc (const void *key_data, uint32_t key_len, uint64_t val) {
     node_t *item = (node_t *)nbd_malloc(sizeof(node_t));
@@ -56,6 +64,22 @@ list_t *ll_alloc (void) {
 }
 
 void ll_free (list_t *ll) {
+    node_t *item = ll->head->next;
+    while (item) {
+        node_t *next = (node_t *)STRIP_TAG(item->next);
+        nbd_free(item);
+        item = next;
+    }
+}
+
+uint64_t ll_count (list_t *ll) {
+    uint64_t count = 0;
+    node_t *item = ll->head->next;
+    while (item) {
+        count++;
+        item = (node_t *)STRIP_TAG(item->next);
+    }
+    return count;
 }
 
 static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, const void *key_data, uint32_t key_len, int help_remove) {
