@@ -8,11 +8,17 @@
 #define ASSERT_EQUAL(x, y) CuAssertIntEquals(tc, x, y)
 
 void test1 (CuTest* tc) {
-    txn_t *tm = txn_begin(TXN_READ_WRITE, TXN_REPEATABLE_READ, MAP_TYPE_LIST);
-    tm_set(tm, "abc", 4, 2);
-    tm_set(tm, "abc", 4, 3);
-    ASSERT_EQUAL( 3, tm_get(tm, "abc", 4) );
-    ASSERT_EQUAL( TXN_VALIDATED, txn_commit(tm));
+    map_t *map = map_alloc(MAP_TYPE_LIST);
+    txn_t *t1 = txn_begin(TXN_READ_WRITE, TXN_REPEATABLE_READ, map);
+    txn_t *t2 = txn_begin(TXN_READ_WRITE, TXN_REPEATABLE_READ, map);
+    tm_set(t1, "abc", 4, 2);
+    tm_set(t1, "abc", 4, 3);
+    ASSERT_EQUAL( DOES_NOT_EXIST, tm_get(t2, "abc", 4) );
+    tm_set(t2, "abc", 4, 4);
+    ASSERT_EQUAL( 3, tm_get(t1, "abc", 4) );
+    ASSERT_EQUAL( 4, tm_get(t2, "abc", 4) );
+    ASSERT_EQUAL( TXN_VALIDATED, txn_commit(t2));
+    ASSERT_EQUAL( TXN_ABORTED, txn_commit(t1));
 }
 
 int main (void) {

@@ -130,7 +130,7 @@ static update_rec_t *alloc_update_rec (void) {
     return u;
 }
 
-txn_t *txn_begin (txn_access_e access, txn_isolation_e isolation, map_type_t map_type) {
+txn_t *txn_begin (txn_access_e access, txn_isolation_e isolation, map_t *map) {
     txn_t *txn = (txn_t *)nbd_malloc(sizeof(txn_t));
     memset(txn, 0, sizeof(txn_t));
     txn->access = access;
@@ -138,7 +138,7 @@ txn_t *txn_begin (txn_access_e access, txn_isolation_e isolation, map_type_t map
     txn->rv = version_;
     txn->wv = UNDETERMINED_VERSION;
     txn->state = TXN_RUNNING;
-    txn->map = map_alloc(map_type);
+    txn->map = map;
     if (isolation != TXN_READ_ONLY) {
         txn->writes = nbd_malloc(sizeof(*txn->writes) * INITIAL_WRITES_SIZE);
         txn->writes_size = INITIAL_WRITES_SIZE;
