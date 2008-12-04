@@ -2,7 +2,7 @@
 + fix makefile to compute dependency info as a side-effect of compilation (-MF)
 - investigate 16 byte CAS; ht can store GUIDs inline instead of pointers to actual keys 
 - testing, testing, testing
-- support integer keys for ht
++ support integer keys for ht
 - validate arguments to interface functions
 + optimize tracing code, still too much overhead
 + use NULL instead of a sentinal node in skiplist and list
@@ -13,4 +13,4 @@
 - iterators
 - characterize performance of data structures
 - experiment with the performance impact of not passing the hash between functions
-- experiment with embedding key is the list/skiplist nodes
+- experiment with embedding keys in the list/skiplist nodes
