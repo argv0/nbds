@@ -11,3 +11,6 @@
 + optimize integer keys
 - ht_print()
 - iterators
+- characterize performance of data structures
+- experiment with the performance impact of not passing the hash between functions
+- experiment with embedding key is the list/skiplist nodes

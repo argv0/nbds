@@ -17,7 +17,7 @@ txn_t *     txn_begin  (txn_access_e access, txn_isolation_e isolation, map_t *m
 void        txn_abort  (txn_t *txn);
 txn_state_e txn_commit (txn_t *txn);
 
-uint64_t tm_get (txn_t *txn, const char *key, uint32_t key_len);
-void     tm_set (txn_t *txn, const char *key, uint32_t key_len, uint64_t value);
+uint64_t tm_get (txn_t *txn, void *key);
+void     tm_set (txn_t *txn, void *key, uint64_t value);
 
 #endif//TXN_H

@@ -4,10 +4,13 @@
 #include <sys/time.h>
 
 #include "common.h"
+#include "nstring.h"
 #include "runtime.h"
 #include "map.h"
 
 #define NUM_ITERATIONS 10000000
+
+//#define TEST_STRING_KEYS
 
 static volatile int wait_;
 static long num_threads_;
@@ -19,22 +22,26 @@ void *worker (void *arg) {
     SYNC_ADD(&wait_, -1);
     do {} while (wait_); 
 
+#ifdef TEST_STRING_KEYS
+        nstring_t *key_str = ns_alloc(10);
+#endif
+
     for (int i = 0; i < NUM_ITERATIONS/num_threads_; ++i) {
         unsigned r = nbd_rand();
         uint64_t key = r & 0xF;
-#if 1
-        char key_str[10];
-        sprintf(key_str, "%llX", key);
+#ifdef TEST_STRING_KEYS
+        key_str->len = sprintf(key_str->data, "%llX", key) + 1;
+        assert(key_str->len <= 10);
         if (r & (1 << 8)) {
-            map_set(map_, key_str, strlen(key_str) + 1, 1);
+            map_set(map_, key_str, 1);
         } else {
-            map_remove(map_, key_str, strlen(key_str) + 1);
+            map_remove(map_, key_str);
         }
 #else
         if (r & (1 << 8)) {
-            map_set(map_, (void *)key, -1, 1);
+            map_set(map_, (void *)(key + 1), 1);
         } else {
-            map_remove(map_, (void *)key, -1);
+            map_remove(map_, (void *)(key + 1));
         }
 #endif
 
@@ -46,7 +53,7 @@ void *worker (void *arg) {
 
 int main (int argc, char **argv) {
     nbd_init();
-    //lwt_set_trace_level("l3");
+    lwt_set_trace_level("l3");
 
     char* program_name = argv[0];
     pthread_t thread[MAX_NUM_THREADS];
@@ -77,7 +84,11 @@ int main (int argc, char **argv) {
 
     map_type_t map_types[] = { MAP_TYPE_LIST, MAP_TYPE_SKIPLIST, MAP_TYPE_HASHTABLE };
     for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {
-        map_ = map_alloc(map_types[i]);
+#ifdef TEST_STRING_KEYS
+        map_ = map_alloc(map_types[i], (cmp_fun_t)ns_cmp, (hash_fun_t)ns_hash, (clone_fun_t)ns_dup);
+#else
+        map_ = map_alloc(map_types[i], NULL, NULL, NULL);
+#endif
 
         struct timeval tv1, tv2;
         gettimeofday(&tv1, NULL);
@@ -96,7 +107,7 @@ int main (int argc, char **argv) {
         gettimeofday(&tv2, NULL);
         int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
         map_print(map_);
-        printf("Th:%ld Time:%dms\n", num_threads_, ms);
+        printf("Th:%ld Time:%dms\n\n", num_threads_, ms);
         fflush(stdout);
     }
 

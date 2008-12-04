@@ -61,3 +61,8 @@ static inline unsigned int murmur32 (const char *key, int len)
 
 	return h;
 } 
+
+static inline unsigned int murmur32_8b (uint64_t key)
+{
+    return murmur32((char *)&key, 8);
+}

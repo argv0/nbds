@@ -15,11 +15,11 @@ struct map {
     void *data;
 };
 
-map_t *map_alloc (map_type_t map_type) { 
+map_t *map_alloc (map_type_t map_type, cmp_fun_t cmp_fun, hash_fun_t hash_fun, clone_fun_t clone_fun) { 
     const map_impl_t *map_impl = map_type;
     map_t *map = nbd_malloc(sizeof(map_t)); 
     map->impl  = map_impl;
-    map->data  = map->impl->alloc();
+    map->data  = map->impl->alloc(cmp_fun, hash_fun, clone_fun);
     return map;
 }
 
@@ -35,26 +35,26 @@ uint64_t map_count (map_t *map) {
     return map->impl->count(map->data);
 }
 
-uint64_t map_get (map_t *map, const void *key_data, uint32_t key_len) {
-    return map->impl->get(map->data, key_data, key_len);
+uint64_t map_get (map_t *map, void *key) {
+    return map->impl->get(map->data, key);
 }
 
-uint64_t map_set (map_t *map, const void *key_data, uint32_t key_len, uint64_t new_val) {
-    return map->impl->cas(map->data, key_data, key_len, CAS_EXPECT_WHATEVER, new_val);
+uint64_t map_set (map_t *map, void *key, uint64_t new_val) {
+    return map->impl->cas(map->data, key, CAS_EXPECT_WHATEVER, new_val);
 }
 
-uint64_t map_add (map_t *map, const void *key_data, uint32_t key_len, uint64_t new_val) {
-    return map->impl->cas(map->data, key_data, key_len, CAS_EXPECT_DOES_NOT_EXIST, new_val);
+uint64_t map_add (map_t *map, void *key, uint64_t new_val) {
+    return map->impl->cas(map->data, key, CAS_EXPECT_DOES_NOT_EXIST, new_val);
 }
 
-uint64_t map_cas (map_t *map, const void *key_data, uint32_t key_len, uint64_t expected_val, uint64_t new_val) {
-    return map->impl->cas(map->data, key_data, key_len, expected_val, new_val);
+uint64_t map_cas (map_t *map, void *key, uint64_t expected_val, uint64_t new_val) {
+    return map->impl->cas(map->data, key, expected_val, new_val);
 }
 
-uint64_t map_replace(map_t *map, const void *key_data, uint32_t key_len, uint64_t new_val) {
-    return map->impl->cas(map->data, key_data, key_len, CAS_EXPECT_EXISTS, new_val);
+uint64_t map_replace(map_t *map, void *key, uint64_t new_val) {
+    return map->impl->cas(map->data, key, CAS_EXPECT_EXISTS, new_val);
 }
 
-uint64_t map_remove (map_t *map, const void *key_data, uint32_t key_len) {
-    return map->impl->remove(map->data, key_data, key_len);
+uint64_t map_remove (map_t *map, void *key) {
+    return map->impl->remove(map->data, key);
 }

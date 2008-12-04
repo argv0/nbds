@@ -21,7 +21,7 @@ struct update_rec {
 };
 
 typedef struct write_rec {
-    const char *key;
+    void *key;
     update_rec_t *rec; 
 } write_rec_t;
 
@@ -44,9 +44,9 @@ static uint64_t version_ = 1;
 
 // Validate the updates for <key>. Validation fails for a key we have written to if there is a 
 // write committed newer than our read version.
-static txn_state_e tm_validate_key (txn_t *txn, const char *key, uint32_t key_len) {
+static txn_state_e tm_validate_key (txn_t *txn, void *key) {
     
-    update_rec_t *update = (update_rec_t *) map_get(txn->map, key, key_len);
+    update_rec_t *update = (update_rec_t *) map_get(txn->map, key);
     for (; update != NULL; update = update->prev) {
         uint64_t writer_version = update->version;
         if (writer_version <= txn->rv)
@@ -102,7 +102,7 @@ static txn_state_e txn_validate (txn_t *txn) {
             }
 
             for (i = 0; i < txn->writes_count; ++i) {
-                txn_state_e s = tm_validate_key(txn, txn->writes[i].key, strlen(txn->writes[i].key));
+                txn_state_e s = tm_validate_key(txn, txn->writes[i].key);
                 if (s == TXN_ABORTED) {
                     txn->state = TXN_ABORTED;
                     break;
@@ -179,11 +179,11 @@ txn_state_e txn_commit (txn_t *txn) {
 }
 
 // Get most recent committed version prior to our read version.
-uint64_t tm_get (txn_t *txn, const char *key, uint32_t key_len) {
+uint64_t tm_get (txn_t *txn, void *key) {
 
     // Iterate through update records associated with <key> to find the latest committed version. 
     // We can use the first matching version. Older updates always come later in the list.
-    update_rec_t *update = (update_rec_t *) map_get(txn->map, key, key_len);
+    update_rec_t *update = (update_rec_t *) map_get(txn->map, key);
     for (; update != NULL; update = update->prev) {
         uint64_t writer_version = update->version;
         if (writer_version < txn->rv)
@@ -213,7 +213,7 @@ uint64_t tm_get (txn_t *txn, const char *key, uint32_t key_len) {
     return DOES_NOT_EXIST;
 }
 
-void tm_set (txn_t *txn, const char *key, uint32_t key_len, uint64_t value) {
+void tm_set (txn_t *txn, void *key, uint64_t value) {
 
     // create a new update record
     update_rec_t *update = alloc_update_rec();
@@ -224,9 +224,9 @@ void tm_set (txn_t *txn, const char *key, uint32_t key_len, uint64_t value) {
     // push the new update record onto <key>'s update list
     uint64_t update_prev;
     do {
-        update->prev = (update_rec_t *) map_get(txn->map, key, key_len);
+        update->prev = (update_rec_t *) map_get(txn->map, key);
         update_prev = (uint64_t)update->prev;
-    } while (map_cas(txn->map, key, key_len, update_prev, (uint64_t)update) != update_prev);
+    } while (map_cas(txn->map, key, update_prev, (uint64_t)update) != update_prev);
 
     // add <key> to the write set for commit-time validation
     if (txn->writes_count == txn->writes_size) {

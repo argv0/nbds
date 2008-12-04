@@ -4,6 +4,7 @@
  */
 #include <stdio.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 #include "CuTest.h"
 
@@ -18,61 +19,61 @@ typedef struct worker_data {
     int id;
     CuTest *tc;
     map_t *map;
-    int *wait;
+    volatile int *wait;
 } worker_data_t;
 
 static map_type_t map_type_;
 
 // Test some basic stuff; add a few keys, remove a few keys
-void basic_test (CuTest* tc) {
+void simple (CuTest* tc) {
 
-    map_t *map = map_alloc(map_type_);
+    map_t *map = map_alloc(map_type_, NULL, NULL, NULL);
 
     ASSERT_EQUAL( 0,              map_count(map)            );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(map,"a",2,10)     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(map, (void *)'a',10)     );
     ASSERT_EQUAL( 1,              map_count(map)            );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(map,"b",2,20)     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(map, (void *)'b',20)     );
     ASSERT_EQUAL( 2,              map_count(map)            );
-    ASSERT_EQUAL( 20,             map_get(map,"b",2)        );
-    ASSERT_EQUAL( 10,             map_set(map,"a",2,11)     );
-    ASSERT_EQUAL( 20,             map_set(map,"b",2,21)     );
+    ASSERT_EQUAL( 20,             map_get(map, (void *)'b')        );
+    ASSERT_EQUAL( 10,             map_set(map, (void *)'a',11)     );
+    ASSERT_EQUAL( 20,             map_set(map, (void *)'b',21)     );
     ASSERT_EQUAL( 2,              map_count(map)            );
-    ASSERT_EQUAL( 21,             map_add(map,"b",2,22)     );
-    ASSERT_EQUAL( 11,             map_remove(map,"a",2)     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map,"a",2)        );
+    ASSERT_EQUAL( 21,             map_add(map, (void *)'b',22)     );
+    ASSERT_EQUAL( 11,             map_remove(map, (void *)'a')     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'a')        );
     ASSERT_EQUAL( 1,              map_count(map)            );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(map,"a",2)     );
-    ASSERT_EQUAL( 21,             map_remove(map,"b",2)     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(map, (void *)'a')     );
+    ASSERT_EQUAL( 21,             map_remove(map, (void *)'b')     );
     ASSERT_EQUAL( 0,              map_count(map)            );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(map,"b",2)     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(map,"c",2)     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(map, (void *)'b')     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(map, (void *)'c')     );
     ASSERT_EQUAL( 0,              map_count(map)            );
     
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(map,"d",2,40)     );
-    ASSERT_EQUAL( 40,             map_get(map,"d",2)        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(map, (void *)'d',40)     );
+    ASSERT_EQUAL( 40,             map_get(map, (void *)'d')        );
     ASSERT_EQUAL( 1,              map_count(map)            );
-    ASSERT_EQUAL( 40,             map_remove(map,"d",2)     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map,"d",2)        );
+    ASSERT_EQUAL( 40,             map_remove(map, (void *)'d')     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'d')        );
     ASSERT_EQUAL( 0,              map_count(map)            );
 
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(map,"d",2,10) );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map,"d",2)        );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_set(map,"d",2,40)     );
-    ASSERT_EQUAL( 40,             map_replace(map,"d",2,41) );
-    ASSERT_EQUAL( 41,             map_get(map,"d",2)        );
-    ASSERT_EQUAL( 41,             map_remove(map,"d",2)     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map,"d",2)        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(map, (void *)'d',10) );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'d')        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_set(map, (void *)'d',40)     );
+    ASSERT_EQUAL( 40,             map_replace(map, (void *)'d',41) );
+    ASSERT_EQUAL( 41,             map_get(map, (void *)'d')        );
+    ASSERT_EQUAL( 41,             map_remove(map, (void *)'d')     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'d')        );
     ASSERT_EQUAL( 0,              map_count(map)            );
 
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(map,"b",2,20) );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map,"b",2)        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(map, (void *)'b',20) );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'b')        );
 
     // In the end, all entries should be removed
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_set(map,"b",2,20)     );
-    ASSERT_EQUAL( 20,             map_replace(map,"b",2,21) );
-    ASSERT_EQUAL( 21,             map_get(map,"b",2)        );
-    ASSERT_EQUAL( 21,             map_remove(map,"b",2)     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map,"b",2)        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_set(map, (void *)'b',20)     );
+    ASSERT_EQUAL( 20,             map_replace(map, (void *)'b',21) );
+    ASSERT_EQUAL( 21,             map_get(map, (void *)'b')        );
+    ASSERT_EQUAL( 21,             map_remove(map, (void *)'b')     );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'b')        );
     ASSERT_EQUAL( 0,              map_count(map)            );
 
     map_free(map);
@@ -81,29 +82,25 @@ void basic_test (CuTest* tc) {
     rcu_update();
 }
 
-void *simple_worker (void *arg) {
+void *add_remove_worker (void *arg) {
     worker_data_t *wd = (worker_data_t *)arg;
     map_t *map = wd->map;
     CuTest* tc = wd->tc;
     uint64_t d = wd->id;
-    int iters = map_type_ == MAP_TYPE_LIST ? 100 : 1000000;
+    int iters = (map_type_ == MAP_TYPE_LIST) ? 5000 : 500000;
 
     SYNC_ADD(wd->wait, -1);
-    do { } while (*((volatile worker_data_t *)wd)->wait); // wait for all workers to be ready
+    do { } while (*wd->wait); // wait for all workers to be ready
 
     for (int j = 0; j < 10; ++j) {
-        for (int i = d; i < iters; i+=2) {
-            char key[10];
-            sprintf(key, "k%u", i); 
+        for (uint64_t i = d+1; i < iters; i+=2) {
             TRACE("t0", "test map_add() iteration (%llu, %llu)", j, i);
-            CuAssertIntEquals_Msg(tc, key, DOES_NOT_EXIST, map_add(map, key, strlen(key)+1, d+1) );
+            CuAssertIntEquals_Msg(tc, (void *)i, DOES_NOT_EXIST, map_add(map, (void *)i, d+1) );
             rcu_update();
         }
-        for (int i = d; i < iters; i+=2) {
-            char key[10];
-            sprintf(key, "k%u", i); 
+        for (uint64_t i = d+1; i < iters; i+=2) {
             TRACE("t0", "test map_remove() iteration (%llu, %llu)", j, i);
-            CuAssertIntEquals_Msg(tc, key, d+1, map_remove(map, key, strlen(key)+1) );
+            CuAssertIntEquals_Msg(tc, (void *)i, d+1, map_remove(map, (void *)i) );
             rcu_update();
         }
     }
@@ -111,12 +108,15 @@ void *simple_worker (void *arg) {
 }
 
 // Do some simple concurrent testing
-void simple_add_remove (CuTest* tc) {
+void add_remove (CuTest* tc) {
 
     pthread_t thread[2];
     worker_data_t wd[2];
-    int wait = 2;
-    map_t *map = map_alloc(map_type_);
+    volatile int wait = 2;
+    map_t *map = map_alloc(map_type_, NULL, NULL, NULL);
+
+    struct timeval tv1, tv2;
+    gettimeofday(&tv1, NULL);
 
     // In 2 threads, add & remove even & odd elements concurrently
     int i;
@@ -125,12 +125,19 @@ void simple_add_remove (CuTest* tc) {
         wd[i].tc = tc;
         wd[i].map = map;
         wd[i].wait = &wait;
-        int rc = nbd_thread_create(thread + i, i, simple_worker, wd + i);
+        int rc = nbd_thread_create(thread + i, i, add_remove_worker, wd + i);
         if (rc != 0) { perror("nbd_thread_create"); return; }
     }
+
     for (i = 0; i < 2; ++i) {
         pthread_join(thread[i], NULL);
     }
+
+    gettimeofday(&tv2, NULL);
+    int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
+    map_print(map);
+    printf("Th:%d Time:%dms\n", 2, ms);
+    fflush(stdout);
 
     // In the end, all members should be removed
     ASSERT_EQUAL( 0, map_count(map) );
@@ -138,7 +145,6 @@ void simple_add_remove (CuTest* tc) {
     // In a quiecent state; it is safe to free.
     map_free(map);
 }
-
 
 void *inserter_worker (void *arg) {
     //pthread_t thread[NUM_THREADS];
@@ -154,7 +160,7 @@ void concurrent_insert (CuTest* tc) {
 int main (void) {
 
     nbd_init();
-    //lwt_set_trace_level("h0");
+    lwt_set_trace_level("h3");
 
     map_type_t map_types[] = { MAP_TYPE_LIST, MAP_TYPE_SKIPLIST, MAP_TYPE_HASHTABLE };
     for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {
@@ -164,8 +170,8 @@ int main (void) {
         CuString *output = CuStringNew();
         CuSuite* suite = CuSuiteNew();
 
-        SUITE_ADD_TEST(suite, basic_test);
-        SUITE_ADD_TEST(suite, simple_add_remove);
+        SUITE_ADD_TEST(suite, simple);
+        SUITE_ADD_TEST(suite, add_remove);
 
         CuSuiteRun(suite);
         CuSuiteDetails(suite, output);
