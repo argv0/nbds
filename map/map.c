@@ -15,11 +15,11 @@ struct map {
     void *data;
 };
 
-map_t *map_alloc (map_type_t map_type, cmp_fun_t cmp_fun, hash_fun_t hash_fun, clone_fun_t clone_fun) { 
+map_t *map_alloc (map_type_t map_type, const datatype_t *key_type) { 
     const map_impl_t *map_impl = map_type;
     map_t *map = nbd_malloc(sizeof(map_t)); 
     map->impl  = map_impl;
-    map->data  = map->impl->alloc(cmp_fun, hash_fun, clone_fun);
+    map->data  = map->impl->alloc(key_type);
     return map;
 }
 

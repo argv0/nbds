@@ -3,6 +3,8 @@
 #include "murmur.h"
 #include "mem.h"
 
+const datatype_t DATATYPE_NSTRING = { (cmp_fun_t)ns_cmp, (hash_fun_t)ns_hash, (clone_fun_t)ns_dup };
+
 nstring_t *ns_alloc (uint32_t len) {
     nstring_t *ns = nbd_malloc(sizeof(nstring_t) + len);
     ns->len = len;

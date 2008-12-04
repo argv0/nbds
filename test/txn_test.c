@@ -8,7 +8,7 @@
 #define ASSERT_EQUAL(x, y) CuAssertIntEquals(tc, x, y)
 
 void test1 (CuTest* tc) {
-    map_t *map = map_alloc(MAP_TYPE_LIST, NULL, NULL, NULL);
+    map_t *map = map_alloc(MAP_TYPE_LIST, NULL);
     txn_t *t1 = txn_begin(TXN_READ_WRITE, TXN_REPEATABLE_READ, map);
     txn_t *t2 = txn_begin(TXN_READ_WRITE, TXN_REPEATABLE_READ, map);
     tm_set(t1, "abc", 2);

@@ -10,7 +10,7 @@ INCS   := $(addprefix -I, include)
 TESTS  := output/map_test1 output/map_test2 output/rcu_test output/txn_test
 EXES   := $(TESTS)
 
-RUNTIME_SRCS := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c runtime/nstring.c 
+RUNTIME_SRCS := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c datatype/nstring.c 
 MAP_SRCS     := map/map.c map/list.c map/skiplist.c map/hashtable.c
 
 rcu_test_SRCS  := $(RUNTIME_SRCS) test/rcu_test.c

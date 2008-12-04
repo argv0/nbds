@@ -10,7 +10,7 @@
 
 #define NUM_ITERATIONS 10000000
 
-//#define TEST_STRING_KEYS
+#define TEST_STRING_KEYS
 
 static volatile int wait_;
 static long num_threads_;
@@ -85,9 +85,9 @@ int main (int argc, char **argv) {
     map_type_t map_types[] = { MAP_TYPE_LIST, MAP_TYPE_SKIPLIST, MAP_TYPE_HASHTABLE };
     for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {
 #ifdef TEST_STRING_KEYS
-        map_ = map_alloc(map_types[i], (cmp_fun_t)ns_cmp, (hash_fun_t)ns_hash, (clone_fun_t)ns_dup);
+        map_ = map_alloc(map_types[i], &DATATYPE_NSTRING);
 #else
-        map_ = map_alloc(map_types[i], NULL, NULL, NULL);
+        map_ = map_alloc(map_types[i], NULL);
 #endif
 
         struct timeval tv1, tv2;

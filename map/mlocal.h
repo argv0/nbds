@@ -1,13 +1,13 @@
 #ifndef MLOCAL_H
 #define MLOCAL_H
 
-#include "map.h"
+#include "datatype.h"
 
 #define CAS_EXPECT_DOES_NOT_EXIST ( 0)
 #define CAS_EXPECT_EXISTS         (-1)
 #define CAS_EXPECT_WHATEVER       (-2)
 
-typedef void *   (*map_alloc_t)  (cmp_fun_t, hash_fun_t, clone_fun_t);
+typedef void *   (*map_alloc_t)  (const datatype_t *);
 typedef uint64_t (*map_cas_t)    (void *, void *, uint64_t, uint64_t);
 typedef uint64_t (*map_get_t)    (void *, void *);
 typedef uint64_t (*map_remove_t) (void *, void *);
@@ -29,9 +29,9 @@ typedef struct ht hashtable_t;
 typedef struct sl skiplist_t;
 typedef struct ll list_t;
 
-hashtable_t * ht_alloc (cmp_fun_t cmp_fun, hash_fun_t hash_fun, clone_fun_t clone_fun);
-skiplist_t *  sl_alloc (cmp_fun_t cmp_fun, hash_fun_t hash_fun, clone_fun_t clone_fun);
-list_t *      ll_alloc (cmp_fun_t cmp_fun, hash_fun_t hash_fun, clone_fun_t clone_fun);
+hashtable_t * ht_alloc (const datatype_t *key_type);
+skiplist_t *  sl_alloc (const datatype_t *key_type);
+list_t *      ll_alloc (const datatype_t *key_type);
 
 uint64_t ht_cas    (hashtable_t *ht, void *key, uint64_t expected_val, uint64_t val);
 uint64_t ht_get    (hashtable_t *ht, void *key);

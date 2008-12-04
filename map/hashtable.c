@@ -37,10 +37,8 @@ typedef struct hti {
 } hti_t;
 
 struct ht {
-    hti_t      *hti;
-    cmp_fun_t   cmp_fun;
-    hash_fun_t  hash_fun;
-    clone_fun_t clone_fun;
+    hti_t *hti;
+    const datatype_t *key_type;
 };
 
 static const map_impl_t ht_map_impl = { 
@@ -93,13 +91,13 @@ static volatile entry_t *hti_lookup (hti_t *hti, void *key, uint32_t key_hash, i
             uint64_t ent_key = ent->key;
             if (ent_key == DOES_NOT_EXIST) {
                 TRACE("h1", "hti_lookup: entry %p for key %p is empty", ent, 
-                            (hti->ht->clone_fun == NULL) ? (void *)ent_key : GET_PTR(ent_key));
+                            (hti->ht->key_type == NULL) ? (void *)ent_key : GET_PTR(ent_key));
                 *is_empty = 1; // indicate an empty so the caller avoids an expensive key compare
                 return ent;
             }
 
             // Compare <key> with the key in the entry. 
-            if (EXPECT_TRUE(hti->ht->cmp_fun == NULL)) {
+            if (EXPECT_TRUE(hti->ht->key_type == NULL)) {
                 // fast path for integer keys
                 if (ent_key == (uint64_t)key) {
                     TRACE("h1", "hti_lookup: found entry %p with key %p", ent, ent_key);
@@ -109,7 +107,7 @@ static volatile entry_t *hti_lookup (hti_t *hti, void *key, uint32_t key_hash, i
                 // The key in <ent> is made up of two parts. The 48 low-order bits are a pointer. The
                 // high-order 16 bits are taken from the hash. The bits from the hash are used as a
                 // quick check to rule out non-equal keys without doing a complete compare.
-                if ((key_hash >> 16) == (ent_key >> 48) && hti->ht->cmp_fun(GET_PTR(ent_key), key) == 0) {
+                if ((key_hash >> 16) == (ent_key >> 48) && hti->ht->key_type->cmp(GET_PTR(ent_key), key) == 0) {
                     TRACE("h1", "hti_lookup: found entry %p with key %p", ent, GET_PTR(ent_key));
                     return ent;
                 }
@@ -187,7 +185,7 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
     assert(ht1->next);
     assert(ht2);
     assert(ht1_ent >= ht1->table && ht1_ent < ht1->table + (1 << ht1->scale));
-    assert(key_hash == 0 || ht1->ht->hash_fun == NULL || (key_hash >> 16) == (ht1_ent->key >> 48));
+    assert(key_hash == 0 || ht1->ht->key_type == NULL || (key_hash >> 16) == (ht1_ent->key >> 48));
 
     uint64_t ht1_ent_val = ht1_ent->val;
     if (EXPECT_FALSE(ht1_ent_val == COPIED_VALUE)) {
@@ -219,13 +217,13 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
 
     // Install the key in the new table.
     uint64_t ht1_ent_key = ht1_ent->key;
-    void *key = (ht1->ht->hash_fun == NULL) ? (void *)ht1_ent_key : GET_PTR(ht1_ent_key);
+    void *key = (ht1->ht->key_type == NULL) ? (void *)ht1_ent_key : GET_PTR(ht1_ent_key);
 
     // The old table's dead entries don't need to be copied to the new table, but their keys need to be freed.
     assert(COPIED_VALUE == TAG_VALUE(TOMBSTONE));
     if (ht1_ent_val == TOMBSTONE) {
         TRACE("h1", "hti_copy_entry: entry %p old value was deleted, now freeing key %p", ht1_ent, key);
-        if (EXPECT_FALSE(ht1->ht->clone_fun != NULL)) {
+        if (EXPECT_FALSE(ht1->ht->key_type != NULL)) {
             nbd_defer_free(key);
         }
         return TRUE; 
@@ -234,7 +232,7 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
     // We use 0 to indicate that <key_hash> is uninitiallized. Occasionally the key's hash will really be 0 and we
     // waste time recomputing it every time. It is rare enough (1 in 65k) that it won't hurt performance. 
     if (key_hash == 0) { 
-        key_hash = (ht1->ht->hash_fun == NULL) ? murmur32_8b(ht1_ent_key) : ht1->ht->hash_fun(key);
+        key_hash = (ht1->ht->key_type == NULL) ? murmur32_8b(ht1_ent_key) : ht1->ht->key_type->hash(key);
     }
 
     int ht2_ent_is_empty;
@@ -328,8 +326,8 @@ static uint64_t hti_cas (hti_t *hti, void *key, uint32_t key_hash, uint64_t expe
             return DOES_NOT_EXIST;
 
         // Allocate <new_key>.
-        uint64_t new_key = (uint64_t)((hti->ht->clone_fun == NULL) ? key : hti->ht->clone_fun(key));
-        if (EXPECT_FALSE(hti->ht->hash_fun != NULL)) {
+        uint64_t new_key = (uint64_t)((hti->ht->key_type == NULL) ? key : hti->ht->key_type->clone(key));
+        if (EXPECT_FALSE(hti->ht->key_type != NULL)) {
             // Combine <new_key> pointer with bits from its hash 
             new_key = ((uint64_t)(key_hash >> 16) << 48) | new_key; 
         }
@@ -341,8 +339,8 @@ static uint64_t hti_cas (hti_t *hti, void *key, uint32_t key_hash, uint64_t expe
         if (old_ent_key != DOES_NOT_EXIST) {
             TRACE("h0", "hti_cas: lost race to install key %p in entry %p", new_key, ent);
             TRACE("h0", "hti_cas: found %p instead of NULL", 
-                        (hti->ht->clone_fun != NULL) ? (void *)old_ent_key : GET_PTR(old_ent_key), 0);
-            if (hti->ht->clone_fun != NULL) {
+                        (hti->ht->key_type == NULL) ? (void *)old_ent_key : GET_PTR(old_ent_key), 0);
+            if (hti->ht->key_type != NULL) {
                 nbd_free(GET_PTR(new_key));
             }
             return hti_cas(hti, key, key_hash, expected, new); // tail-call
@@ -351,7 +349,7 @@ static uint64_t hti_cas (hti_t *hti, void *key, uint32_t key_hash, uint64_t expe
     }
 
     TRACE("h0", "hti_cas: entry for key %p is %p", 
-                (hti->ht->clone_fun != NULL) ? (void *)ent->key : GET_PTR(ent->key), ent);
+                (hti->ht->key_type == NULL) ? (void *)ent->key : GET_PTR(ent->key), ent);
 
     // If the entry is in the middle of a copy, the copy must be completed first.
     uint64_t ent_val = ent->val;
@@ -437,7 +435,7 @@ static uint64_t hti_get (hti_t *hti, void *key, uint32_t key_hash) {
 
 //
 uint64_t ht_get (hashtable_t *ht, void *key) {
-    uint32_t hash = (ht->hash_fun == NULL) ? murmur32_8b((uint64_t)key) : ht->hash_fun(key);
+    uint32_t hash = (ht->key_type == NULL) ? murmur32_8b((uint64_t)key) : ht->key_type->hash(key);
     return hti_get(ht->hti, key, hash);
 }
 
@@ -498,7 +496,7 @@ uint64_t ht_cas (hashtable_t *ht, void *key, uint64_t expected_val, uint64_t new
     }
 
     uint64_t old_val;
-    uint32_t key_hash = (ht->hash_fun == NULL) ? murmur32_8b((uint64_t)key) : ht->hash_fun(key);
+    uint32_t key_hash = (ht->key_type == NULL) ? murmur32_8b((uint64_t)key) : ht->key_type->hash(key);
     while ((old_val = hti_cas(hti, key, key_hash, expected_val, new_val)) == COPIED_VALUE) {
         assert(hti->next);
         hti = hti->next;
@@ -512,7 +510,7 @@ uint64_t ht_cas (hashtable_t *ht, void *key, uint64_t expected_val, uint64_t new
 uint64_t ht_remove (hashtable_t *ht, void *key) {
     hti_t *hti = ht->hti;
     uint64_t val;
-    uint32_t key_hash = (ht->hash_fun == NULL) ? murmur32_8b((uint64_t)key) : ht->hash_fun(key);
+    uint32_t key_hash = (ht->key_type == NULL) ? murmur32_8b((uint64_t)key) : ht->key_type->hash(key);
     do {
         val = hti_cas(hti, key, key_hash, CAS_EXPECT_WHATEVER, TOMBSTONE);
         if (val != COPIED_VALUE)
@@ -535,11 +533,9 @@ uint64_t ht_count (hashtable_t *ht) {
 }
 
 // Allocate and initialize a new hash table.
-hashtable_t *ht_alloc (cmp_fun_t cmp_fun, hash_fun_t hash_fun, clone_fun_t clone_fun) {
+hashtable_t *ht_alloc (const datatype_t *key_type) {
     hashtable_t *ht = nbd_malloc(sizeof(hashtable_t));
-    ht->cmp_fun = cmp_fun;
-    ht->hash_fun = hash_fun;
-    ht->clone_fun = clone_fun;
+    ht->key_type = key_type;
     ht->hti = (hti_t *)hti_alloc(ht, MIN_SCALE);
     return ht;
 }
@@ -550,7 +546,7 @@ void ht_free (hashtable_t *ht) {
     do {
         for (uint32_t i = 0; i < (1 << hti->scale); ++i) {
             assert(hti->table[i].val == COPIED_VALUE || !IS_TAGGED(hti->table[i].val));
-            if (ht->clone_fun != NULL && hti->table[i].key != DOES_NOT_EXIST) {
+            if (ht->key_type != NULL && hti->table[i].key != DOES_NOT_EXIST) {
                 nbd_free(GET_PTR(hti->table[i].key));
             }
         }

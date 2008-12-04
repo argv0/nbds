@@ -9,9 +9,12 @@
  * See also Kir Fraser's dissertation "Practical Lock Freedom".
  * www.cl.cam.ac.uk/techreports/UCAM-CL-TR-579.pdf
  *
- * This code is written for the x86 memory-model. The algorithim depends on certain stores and
- * loads being ordered. Be careful, this code won't work correctly on platforms with weaker memory
- * models if you don't add memory barriers in the right places.
+ * I've generalized the data structure to support update operations like set() and CAS() in addition to 
+ * the normal add() and remove() operations.
+ *
+ * Warning: This code is written for the x86 memory-model. The algorithim depends on certain stores 
+ * and loads being ordered. This code won't work correctly on platforms with weaker memory models if
+ * you don't add memory barriers in the right places.
  */
 
 #include <stdio.h>
@@ -25,8 +28,7 @@
 #include "mem.h"
 #include "tls.h"
 
-// Setting MAX_LEVEL to 0 essentially makes this data structure the Harris-Michael lock-free list
-// (in list.c).
+// Setting MAX_LEVEL to 0 essentially makes this data structure the Harris-Michael lock-free list (in list.c).
 #define MAX_LEVEL 31
 
 typedef struct node {
@@ -38,8 +40,7 @@ typedef struct node {
 
 struct sl {
     node_t *head;
-    cmp_fun_t cmp_fun;
-    clone_fun_t clone_fun;
+    const datatype_t *key_type;
 };
 
 static const map_impl_t sl_map_impl = { 
@@ -72,10 +73,9 @@ static node_t *node_alloc (int level, void *key, uint64_t val) {
     return item;
 }
 
-skiplist_t *sl_alloc (cmp_fun_t cmp_fun, hash_fun_t hash_fun, clone_fun_t clone_fun) {
+skiplist_t *sl_alloc (const datatype_t *key_type) {
     skiplist_t *sl = (skiplist_t *)nbd_malloc(sizeof(skiplist_t));
-    sl->cmp_fun = cmp_fun;
-    sl->clone_fun = clone_fun;
+    sl->key_type = key_type;
     sl->head = node_alloc(MAX_LEVEL, NULL, 0);
     memset(sl->head->next, 0, (MAX_LEVEL+1) * sizeof(skiplist_t *));
     return sl;
@@ -159,7 +159,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
 
                     // The thread that completes the unlink should free the memory.
                     if (level == 0) {
-                        if (sl->clone_fun != NULL) {
+                        if (sl->key_type != NULL) {
                             nbd_defer_free((void*)other->key);
                         }
                         nbd_defer_free(other);
@@ -182,10 +182,10 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
             TRACE("s4", "find_preds: visiting item %p (next is %p)", item, next);
             TRACE("s4", "find_preds: key %p val %p", STRIP_TAG(item->key), item->val);
 
-            if (EXPECT_TRUE(sl->cmp_fun == NULL)) {
+            if (EXPECT_TRUE(sl->key_type == NULL)) {
                 d = (uint64_t)item->key - (uint64_t)key;
             } else {
-                d = sl->cmp_fun(item->key, key);
+                d = sl->key_type->cmp(item->key, key);
             }
 
             if (d >= 0) {
@@ -264,7 +264,7 @@ uint64_t sl_cas (skiplist_t *sl, void *key, uint64_t expectation, uint64_t new_v
 
             // First insert <new_item> into the bottom level.
             TRACE("s3", "sl_cas: attempting to insert item between %p and %p", preds[0], nexts[0]);
-            void *new_key  = (sl->clone_fun == NULL) ? key : sl->clone_fun(key);
+            void *new_key  = (sl->key_type == NULL) ? key : sl->key_type->clone(key);
             new_item = node_alloc(n, new_key, new_val);
             node_t *pred = preds[0];
             node_t *next = new_item->next[0] = nexts[0];
@@ -277,7 +277,7 @@ uint64_t sl_cas (skiplist_t *sl, void *key, uint64_t expectation, uint64_t new_v
                 break; // success
             }
             TRACE("s3", "sl_cas: failed to change pred's link: expected %p found %p", next, other);
-            if (sl->clone_fun != NULL) {
+            if (sl->key_type != NULL) {
                 nbd_free(new_key);
             }
             nbd_free(new_item);
@@ -381,10 +381,10 @@ uint64_t sl_remove (skiplist_t *sl, void *key) {
 
             int d = -1;
             if (!IS_TAGGED(other)) {
-                if (EXPECT_TRUE(sl->cmp_fun == NULL)) {
+                if (EXPECT_TRUE(sl->key_type == NULL)) {
                     d = (uint64_t)item->key - (uint64_t)other->key;
                 } else {
-                    d = sl->cmp_fun(item->key, other->key);
+                    d = sl->key_type->cmp(item->key, other->key);
                 }
             }
             if (d > 0) {
@@ -418,7 +418,7 @@ uint64_t sl_remove (skiplist_t *sl, void *key) {
     if (SYNC_CAS(&pred->next[0], item, STRIP_TAG(next))) {
         TRACE("s2", "sl_remove: unlinked item %p from the skiplist at level 0", item, 0);
         // The thread that completes the unlink should free the memory.
-        if (sl->clone_fun != NULL) {
+        if (sl->key_type != NULL) {
             nbd_defer_free(item->key);
         }
         nbd_defer_free(item);
@@ -445,7 +445,6 @@ void sl_print (skiplist_t *sl) {
         printf("\n");
         fflush(stdout);
     }
-
     node_t *item = sl->head;
     int i = 0;
     while (item) {

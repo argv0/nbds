@@ -10,10 +10,13 @@
 
 #include "common.h"
 #include "runtime.h"
+#include "nstring.h"
 #include "map.h"
 #include "lwt.h"
 
 #define ASSERT_EQUAL(x, y) CuAssertIntEquals(tc, x, y)
+
+#define TEST_STRING_KEYS
 
 typedef struct worker_data {
     int id;
@@ -27,54 +30,66 @@ static map_type_t map_type_;
 // Test some basic stuff; add a few keys, remove a few keys
 void simple (CuTest* tc) {
 
-    map_t *map = map_alloc(map_type_, NULL, NULL, NULL);
+#ifdef TEST_STRING_KEYS
+    map_t *map = map_alloc(map_type_, &DATATYPE_NSTRING);
+    nstring_t *k1 = ns_alloc(3); strcpy(k1->data, "k1");
+    nstring_t *k2 = ns_alloc(3); strcpy(k1->data, "k2");
+    nstring_t *k3 = ns_alloc(3); strcpy(k1->data, "k3");
+    nstring_t *k4 = ns_alloc(3); strcpy(k1->data, "k4");
+#else
+    map_t *map = map_alloc(map_type_, NULL);
+    void *k1 = (void *)1;
+    void *k2 = (void *)2;
+    void *k3 = (void *)3;
+    void *k4 = (void *)4;
+#endif
 
-    ASSERT_EQUAL( 0,              map_count(map)            );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(map, (void *)'a',10)     );
-    ASSERT_EQUAL( 1,              map_count(map)            );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(map, (void *)'b',20)     );
-    ASSERT_EQUAL( 2,              map_count(map)            );
-    ASSERT_EQUAL( 20,             map_get(map, (void *)'b')        );
-    ASSERT_EQUAL( 10,             map_set(map, (void *)'a',11)     );
-    ASSERT_EQUAL( 20,             map_set(map, (void *)'b',21)     );
-    ASSERT_EQUAL( 2,              map_count(map)            );
-    ASSERT_EQUAL( 21,             map_add(map, (void *)'b',22)     );
-    ASSERT_EQUAL( 11,             map_remove(map, (void *)'a')     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'a')        );
-    ASSERT_EQUAL( 1,              map_count(map)            );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(map, (void *)'a')     );
-    ASSERT_EQUAL( 21,             map_remove(map, (void *)'b')     );
-    ASSERT_EQUAL( 0,              map_count(map)            );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(map, (void *)'b')     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove(map, (void *)'c')     );
-    ASSERT_EQUAL( 0,              map_count(map)            );
+    ASSERT_EQUAL( 0,              map_count  (map)        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_add    (map, k1,10) );
+    ASSERT_EQUAL( 1,              map_count  (map)        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_add    (map, k2,20) );
+    ASSERT_EQUAL( 2,              map_count  (map)        );
+    ASSERT_EQUAL( 20,             map_get    (map, k2)    );
+    ASSERT_EQUAL( 10,             map_set    (map, k1,11) );
+    ASSERT_EQUAL( 20,             map_set    (map, k2,21) );
+    ASSERT_EQUAL( 2,              map_count  (map)        );
+    ASSERT_EQUAL( 21,             map_add    (map, k2,22) );
+    ASSERT_EQUAL( 11,             map_remove (map, k1)    );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get    (map, k1)    );
+    ASSERT_EQUAL( 1,              map_count  (map)        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove (map, k1)    );
+    ASSERT_EQUAL( 21,             map_remove (map, k2)    );
+    ASSERT_EQUAL( 0,              map_count  (map)        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove (map, k2)    );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_remove (map, k3)    );
+    ASSERT_EQUAL( 0,              map_count  (map)        );
     
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_add(map, (void *)'d',40)     );
-    ASSERT_EQUAL( 40,             map_get(map, (void *)'d')        );
-    ASSERT_EQUAL( 1,              map_count(map)            );
-    ASSERT_EQUAL( 40,             map_remove(map, (void *)'d')     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'d')        );
-    ASSERT_EQUAL( 0,              map_count(map)            );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_add    (map, k4,40) );
+    ASSERT_EQUAL( 40,             map_get    (map, k4)    );
+    ASSERT_EQUAL( 1,              map_count  (map)        );
+    ASSERT_EQUAL( 40,             map_remove (map, k4)    );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get    (map, k4)    );
+    ASSERT_EQUAL( 0,              map_count  (map)        );
 
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(map, (void *)'d',10) );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'d')        );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_set(map, (void *)'d',40)     );
-    ASSERT_EQUAL( 40,             map_replace(map, (void *)'d',41) );
-    ASSERT_EQUAL( 41,             map_get(map, (void *)'d')        );
-    ASSERT_EQUAL( 41,             map_remove(map, (void *)'d')     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'d')        );
-    ASSERT_EQUAL( 0,              map_count(map)            );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(map, k4,10) );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get    (map, k4)    );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_set    (map, k4,40) );
+    ASSERT_EQUAL( 40,             map_replace(map, k4,41) );
+    ASSERT_EQUAL( 41,             map_get    (map, k4)    );
+    ASSERT_EQUAL( 41,             map_remove (map, k4)    );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get    (map, k4)    );
+    ASSERT_EQUAL( 0,              map_count  (map)        );
 
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(map, (void *)'b',20) );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'b')        );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_replace(map, k2,20) );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get    (map, k2)    );
 
     // In the end, all entries should be removed
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_set(map, (void *)'b',20)     );
-    ASSERT_EQUAL( 20,             map_replace(map, (void *)'b',21) );
-    ASSERT_EQUAL( 21,             map_get(map, (void *)'b')        );
-    ASSERT_EQUAL( 21,             map_remove(map, (void *)'b')     );
-    ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, (void *)'b')        );
-    ASSERT_EQUAL( 0,              map_count(map)            );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_set    (map, k2,20) );
+    ASSERT_EQUAL( 20,             map_replace(map, k2,21) );
+    ASSERT_EQUAL( 21,             map_get    (map, k2)    );
+    ASSERT_EQUAL( 21,             map_remove (map, k2)    );
+    ASSERT_EQUAL( DOES_NOT_EXIST, map_get    (map, k2)    );
+    ASSERT_EQUAL( 0,              map_count  (map)        );
 
     map_free(map);
 
@@ -87,20 +102,38 @@ void *add_remove_worker (void *arg) {
     map_t *map = wd->map;
     CuTest* tc = wd->tc;
     uint64_t d = wd->id;
-    int iters = (map_type_ == MAP_TYPE_LIST) ? 5000 : 500000;
+    int iters = 10000;
 
     SYNC_ADD(wd->wait, -1);
     do { } while (*wd->wait); // wait for all workers to be ready
 
+#ifdef TEST_STRING_KEYS
+    nstring_t *key = ns_alloc(9);
+#else
+    void *key;
+#endif
+
     for (int j = 0; j < 10; ++j) {
         for (uint64_t i = d+1; i < iters; i+=2) {
+#ifdef TEST_STRING_KEYS
+            memset(key->data, 0, key->len);
+            snprintf(key->data, key->len, "%llu", i);
+#else
+            key = (void *)i;
+#endif
             TRACE("t0", "test map_add() iteration (%llu, %llu)", j, i);
-            CuAssertIntEquals_Msg(tc, (void *)i, DOES_NOT_EXIST, map_add(map, (void *)i, d+1) );
+            CuAssertIntEquals_Msg(tc, (void *)i, DOES_NOT_EXIST, map_add(map, key, d+1) );
             rcu_update();
         }
         for (uint64_t i = d+1; i < iters; i+=2) {
+#ifdef TEST_STRING_KEYS
+            memset(key->data, 0, key->len);
+            snprintf(key->data, key->len, "%llu", i);
+#else
+            key = (void *)i;
+#endif
             TRACE("t0", "test map_remove() iteration (%llu, %llu)", j, i);
-            CuAssertIntEquals_Msg(tc, (void *)i, d+1, map_remove(map, (void *)i) );
+            CuAssertIntEquals_Msg(tc, (void *)i, d+1, map_remove(map, key) );
             rcu_update();
         }
     }
@@ -113,7 +146,11 @@ void add_remove (CuTest* tc) {
     pthread_t thread[2];
     worker_data_t wd[2];
     volatile int wait = 2;
-    map_t *map = map_alloc(map_type_, NULL, NULL, NULL);
+#ifdef TEST_STRING_KEYS
+    map_t *map = map_alloc(map_type_, &DATATYPE_NSTRING);
+#else
+    map_t *map = map_alloc(map_type_, NULL);
+#endif
 
     struct timeval tv1, tv2;
     gettimeofday(&tv1, NULL);

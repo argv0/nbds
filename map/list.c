@@ -21,8 +21,7 @@ typedef struct node {
 
 struct ll {
     node_t *head;
-    cmp_fun_t cmp_fun;
-    clone_fun_t clone_fun;
+    const datatype_t *key_type;
 };
 
 static const map_impl_t ll_map_impl = { 
@@ -39,10 +38,9 @@ static node_t *node_alloc (void *key, uint64_t val) {
     return item;
 }
 
-list_t *ll_alloc (cmp_fun_t cmp_fun, hash_fun_t hash_fun, clone_fun_t clone_fun) {
+list_t *ll_alloc (const datatype_t *key_type) {
     list_t *ll = (list_t *)nbd_malloc(sizeof(list_t));
-    ll->cmp_fun = cmp_fun;
-    ll->clone_fun = clone_fun;
+    ll->key_type = key_type;
     ll->head = node_alloc(NULL, 0);
     ll->head->next = NULL;
     return ll;
@@ -100,7 +98,7 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, void *ke
                 TRACE("l3", "find_pred: now current item is %p next is %p", item, next);
 
                 // The thread that completes the unlink should free the memory.
-                if (ll->clone_fun != NULL) {
+                if (ll->key_type != NULL) {
                     nbd_defer_free((void*)other->key);
                 }
                 nbd_defer_free(other);
@@ -123,10 +121,10 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, void *ke
         TRACE("l4", "find_pred: key %p val %p", item->key, item->val);
 
         int d;
-        if (EXPECT_TRUE(ll->cmp_fun == NULL)) {
+        if (EXPECT_TRUE(ll->key_type == NULL)) {
             d = (uint64_t)item->key - (uint64_t)key;
         } else {
-            d = ll->cmp_fun(item->key, key);
+            d = ll->key_type->cmp(item->key, key);
         }
 
         // If we reached the key (or passed where it should be), we found the right predesssor
@@ -195,7 +193,7 @@ uint64_t ll_cas (list_t *ll, void *key, uint64_t expectation, uint64_t new_val) 
 
             // Create a new item and insert it into the list.
             TRACE("l2", "ll_cas: attempting to insert item between %p and %p", pred, pred->next);
-            void *new_key  = (ll->clone_fun == NULL) ? key : ll->clone_fun(key);
+            void *new_key  = (ll->key_type == NULL) ? key : ll->key_type->clone(key);
             node_t *new_item = node_alloc(new_key, new_val);
             node_t *next = new_item->next = old_item;
             node_t *other = SYNC_CAS(&pred->next, next, new_item);
@@ -206,7 +204,7 @@ uint64_t ll_cas (list_t *ll, void *key, uint64_t expectation, uint64_t new_val) 
 
             // Lost a race. Failed to insert the new item into the list.
             TRACE("l1", "ll_cas: lost a race. CAS failed. expected pred's link to be %p but found %p", next, other);
-            if (ll->clone_fun != NULL) {
+            if (ll->key_type != NULL) {
                 nbd_free(new_key);
             }
             nbd_free(new_item);
@@ -284,7 +282,7 @@ uint64_t ll_remove (list_t *ll, void *key) {
     } 
 
     // The thread that completes the unlink should free the memory.
-    if (ll->clone_fun != NULL) {
+    if (ll->key_type != NULL) {
         nbd_defer_free(item->key);
     }
     nbd_defer_free(item);
