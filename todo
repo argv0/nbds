@@ -14,3 +14,4 @@
 - characterize performance of data structures
 - experiment with the performance impact of not passing the hash between functions
 - experiment with embedding keys in the list/skiplist nodes
+- allow values of 0 to be inserted into maps (change DOES_NOT_EXIST to something else)

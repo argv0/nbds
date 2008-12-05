@@ -45,7 +45,7 @@ static txn_state_e txn_validate (txn_t *txn);
 static map_t *active_ = NULL;
 
 void txn_init (void) {
-    active_ = map_alloc(MAP_TYPE_SKIPLIST, NULL);
+    active_ = map_alloc(&sl_map_impl, NULL);
 }
 
 // Validate the updates for <key>. Validation fails for a key we have written to if there is a 

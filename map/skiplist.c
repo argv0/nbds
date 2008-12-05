@@ -22,7 +22,6 @@
 
 #include "common.h"
 #include "runtime.h"
-#include "mlocal.h"
 #include "skiplist.h"
 #include "mem.h"
 
@@ -40,13 +39,6 @@ struct sl {
     node_t *head;
     const datatype_t *key_type;
 };
-
-static const map_impl_t sl_map_impl = { 
-    (map_alloc_t)sl_alloc, (map_cas_t)sl_cas, (map_get_t)sl_lookup, (map_remove_t)sl_remove, 
-    (map_count_t)sl_count, (map_print_t)sl_print, (map_free_t)sl_free
-};
-
-const map_impl_t *MAP_TYPE_SKIPLIST = &sl_map_impl;
 
 static int random_level (void) {
     unsigned r = nbd_rand();

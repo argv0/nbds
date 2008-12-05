@@ -6,17 +6,15 @@
  */
 
 #include "common.h"
-#include "mlocal.h"
-#include "mem.h"
 #include "map.h"
+#include "mem.h"
 
 struct map {
     const map_impl_t *impl;
     void *data;
 };
 
-map_t *map_alloc (map_type_t map_type, const datatype_t *key_type) { 
-    const map_impl_t *map_impl = map_type;
+map_t *map_alloc (const map_impl_t *map_impl, const datatype_t *key_type) { 
     map_t *map = nbd_malloc(sizeof(map_t)); 
     map->impl  = map_impl;
     map->data  = map->impl->alloc(key_type);

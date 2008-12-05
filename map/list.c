@@ -10,7 +10,6 @@
 #include <string.h>
 
 #include "common.h"
-#include "mlocal.h"
 #include "list.h"
 #include "mem.h"
 
@@ -24,13 +23,6 @@ struct ll {
     node_t *head;
     const datatype_t *key_type;
 };
-
-static const map_impl_t ll_map_impl = { 
-    (map_alloc_t)ll_alloc, (map_cas_t)ll_cas, (map_get_t)ll_lookup, (map_remove_t)ll_remove, 
-    (map_count_t)ll_count, (map_print_t)ll_print, (map_free_t)ll_free
-};
-
-const map_impl_t *MAP_TYPE_LIST = &ll_map_impl;
 
 static node_t *node_alloc (void *key, uint64_t val) {
     node_t *item = (node_t *)nbd_malloc(sizeof(node_t));

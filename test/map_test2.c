@@ -28,7 +28,7 @@ typedef struct worker_data {
     volatile int *wait;
 } worker_data_t;
 
-static map_type_t map_type_;
+static const map_impl_t *map_type_;
 
 // Test some basic stuff; add a few keys, remove a few keys
 void simple (CuTest* tc) {
@@ -202,7 +202,7 @@ int main (void) {
     nbd_init();
     lwt_set_trace_level("h3");
 
-    map_type_t map_types[] = { MAP_TYPE_LIST, MAP_TYPE_SKIPLIST, MAP_TYPE_HASHTABLE };
+    static const map_impl_t *map_types[] = { &ll_map_impl, &sl_map_impl, &ht_map_impl };
     for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {
         map_type_ = map_types[i];
 

@@ -85,7 +85,7 @@ int main (int argc, char **argv) {
         }
     }
 
-    map_type_t map_types[] = { MAP_TYPE_LIST, MAP_TYPE_SKIPLIST, MAP_TYPE_HASHTABLE };
+    static const map_impl_t *map_types[] = { &ll_map_impl, &sl_map_impl, &ht_map_impl };
     for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {
 #ifdef TEST_STRING_KEYS
         map_ = map_alloc(map_types[i], &DATATYPE_NSTRING);

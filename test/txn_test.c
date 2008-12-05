@@ -10,7 +10,7 @@
 #define ASSERT_EQUAL(x, y) CuAssertIntEquals(tc, x, y)
 
 void test1 (CuTest* tc) {
-    map_t *map = map_alloc(MAP_TYPE_HASHTABLE, NULL);
+    map_t *map = map_alloc(&ht_map_impl, NULL);
     txn_t *t1 = txn_begin(TXN_REPEATABLE_READ, map);
     txn_t *t2 = txn_begin(TXN_REPEATABLE_READ, map);
     tm_set(t1, "abc", 2);
@@ -26,6 +26,7 @@ void test1 (CuTest* tc) {
 int main (void) {
 
     nbd_init();
+    txn_init();
 
     CuString *output = CuStringNew();
     CuSuite* suite = CuSuiteNew();
