@@ -4,13 +4,15 @@
 #include "common.h"
 #include "runtime.h"
 #include "txn.h"
+#include "map.h"
+#include "hashtable.h"
 
 #define ASSERT_EQUAL(x, y) CuAssertIntEquals(tc, x, y)
 
 void test1 (CuTest* tc) {
-    map_t *map = map_alloc(MAP_TYPE_LIST, NULL);
-    txn_t *t1 = txn_begin(TXN_READ_WRITE, TXN_REPEATABLE_READ, map);
-    txn_t *t2 = txn_begin(TXN_READ_WRITE, TXN_REPEATABLE_READ, map);
+    map_t *map = map_alloc(MAP_TYPE_HASHTABLE, NULL);
+    txn_t *t1 = txn_begin(TXN_REPEATABLE_READ, map);
+    txn_t *t2 = txn_begin(TXN_REPEATABLE_READ, map);
     tm_set(t1, "abc", 2);
     tm_set(t1, "abc", 3);
     ASSERT_EQUAL( DOES_NOT_EXIST, tm_get(t2, "abc") );

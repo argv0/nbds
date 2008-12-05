@@ -17,6 +17,7 @@
 #include "murmur.h"
 #include "mem.h"
 #include "mlocal.h"
+#include "hashtable.h"
 
 #define GET_PTR(x) ((void *)((x) & MASK(48))) // low-order 48 bits is a pointer to a nstring_t
 
@@ -284,7 +285,7 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
 }
 
 // Compare <expected> with the existing value associated with <key>. If the values match then 
-// replace the existing value with <new>. If <new> is TOMBSTONE, delete the value associated with 
+// replace the existing value with <new>. If <new> is DOES_NOT_EXIST, delete the value associated with 
 // the key by replacing it with a TOMBSTONE.
 //
 // Return the previous value associated with <key>, or DOES_NOT_EXIST if <key> is not in the table
@@ -301,7 +302,7 @@ static uint64_t hti_cas (hti_t *hti, void *key, uint32_t key_hash, uint64_t expe
     TRACE("h1", "hti_cas: hti %p key %p", hti, key);
     TRACE("h1", "hti_cas: value %p expect %p", new, expected);
     assert(hti);
-    assert(new != DOES_NOT_EXIST && !IS_TAGGED(new));
+    assert(!IS_TAGGED(new));
     assert(key);
 
     int is_empty;
@@ -322,7 +323,7 @@ static uint64_t hti_cas (hti_t *hti, void *key, uint32_t key_hash, uint64_t expe
             return DOES_NOT_EXIST;
 
         // No need to do anything, <key> is already deleted.
-        if (new == TOMBSTONE)
+        if (new == DOES_NOT_EXIST)
             return DOES_NOT_EXIST;
 
         // Allocate <new_key>.
@@ -377,22 +378,22 @@ static uint64_t hti_cas (hti_t *hti, void *key, uint32_t key_hash, uint64_t expe
     }
 
     // No need to update if value is unchanged.
-    if ((new == TOMBSTONE && !old_existed) || ent_val == new) {
+    if ((new == DOES_NOT_EXIST && !old_existed) || ent_val == new) {
         TRACE("h1", "hti_cas: old value and new value were the same", 0, 0);
         return ent_val;
     }
 
     // CAS the value into the entry. Retry if it fails.
-    uint64_t v = SYNC_CAS(&ent->val, ent_val, new);
+    uint64_t v = SYNC_CAS(&ent->val, ent_val, new == DOES_NOT_EXIST ? TOMBSTONE : new);
     if (EXPECT_FALSE(v != ent_val)) {
         TRACE("h0", "hti_cas: value CAS failed; expected %p found %p", ent_val, v);
         return hti_cas(hti, key, key_hash, expected, new); // recursive tail-call
     }
 
     // The set succeeded. Adjust the value count.
-    if (old_existed && new == TOMBSTONE) {
+    if (old_existed && new == DOES_NOT_EXIST) {
         SYNC_ADD(&hti->count, -1);
-    } else if (!old_existed && new != TOMBSTONE) {
+    } else if (!old_existed && new != DOES_NOT_EXIST) {
         SYNC_ADD(&hti->count, 1);
     }
 
@@ -512,7 +513,7 @@ uint64_t ht_remove (hashtable_t *ht, void *key) {
     uint64_t val;
     uint32_t key_hash = (ht->key_type == NULL) ? murmur32_8b((uint64_t)key) : ht->key_type->hash(key);
     do {
-        val = hti_cas(hti, key, key_hash, CAS_EXPECT_WHATEVER, TOMBSTONE);
+        val = hti_cas(hti, key, key_hash, CAS_EXPECT_WHATEVER, DOES_NOT_EXIST);
         if (val != COPIED_VALUE)
             return val == TOMBSTONE ? DOES_NOT_EXIST : val;
         assert(hti->next);

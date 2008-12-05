@@ -20,13 +20,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#define ENABLE_TRACE
-
 #include "common.h"
 #include "runtime.h"
 #include "mlocal.h"
+#include "skiplist.h"
 #include "mem.h"
-#include "tls.h"
 
 // Setting MAX_LEVEL to 0 essentially makes this data structure the Harris-Michael lock-free list (in list.c).
 #define MAX_LEVEL 31
@@ -409,7 +407,7 @@ uint64_t sl_remove (skiplist_t *sl, void *key) {
     TRACE("s1", "sl_remove: marked item %p removed at level 0", item, 0);
 
     // Atomically swap out the item's value in case another thread is updating the item while we are 
-    // removing it. This establishes which one occurs first, the update or the remove. 
+    // removing it. This establishes which operation occurs first logically, the update or the remove. 
     uint64_t val = SYNC_SWAP(&item->val, DOES_NOT_EXIST); 
     TRACE("s2", "sl_remove: replaced item %p's value with DOES_NOT_EXIT", item, 0);
 

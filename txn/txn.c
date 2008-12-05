@@ -5,6 +5,7 @@
 #include "common.h"
 #include "txn.h"
 #include "mem.h"
+#include "skiplist.h"
 
 #define UNDETERMINED_VERSION 0
 #define INITIAL_WRITES_SIZE  4
@@ -33,14 +34,19 @@ struct txn {
     uint32_t writes_size;
     uint32_t writes_count;
     uint32_t writes_scan;
-    txn_access_e access;
-    txn_isolation_e isolation;
+    txn_type_e type;
     txn_state_e state;
 };
 
+static uint64_t version_ = 1;
+
 static txn_state_e txn_validate (txn_t *txn);
 
-static uint64_t version_ = 1;
+static map_t *active_ = NULL;
+
+void txn_init (void) {
+    active_ = map_alloc(MAP_TYPE_SKIPLIST, NULL);
+}
 
 // Validate the updates for <key>. Validation fails for a key we have written to if there is a 
 // write committed newer than our read version.
@@ -130,19 +136,39 @@ static update_rec_t *alloc_update_rec (void) {
     return u;
 }
 
-txn_t *txn_begin (txn_access_e access, txn_isolation_e isolation, map_t *map) {
+txn_t *txn_begin (txn_type_e type, map_t *map) {
     txn_t *txn = (txn_t *)nbd_malloc(sizeof(txn_t));
     memset(txn, 0, sizeof(txn_t));
-    txn->access = access;
-    txn->isolation = isolation;
-    txn->rv = version_;
+    txn->type = type;
     txn->wv = UNDETERMINED_VERSION;
     txn->state = TXN_RUNNING;
     txn->map = map;
-    if (isolation != TXN_READ_ONLY) {
+    if (type != TXN_READ_ONLY) {
         txn->writes = nbd_malloc(sizeof(*txn->writes) * INITIAL_WRITES_SIZE);
         txn->writes_size = INITIAL_WRITES_SIZE;
     }
+
+    // aquire the read version for txn.
+    do {
+        txn->rv = version_;
+
+        uint64_t old_count;
+        uint64_t temp = 0;
+        do {
+            old_count = temp;
+            temp = (uint64_t)map_cas(active_, (void *)txn->rv, old_count, old_count + 1);
+        } while (temp != old_count);
+
+        if (txn->rv == version_)
+            break;
+
+        temp = 1;
+        do {
+            old_count = temp;
+            temp = map_cas(active_, (void *)txn->rv, old_count, old_count - 1);
+        } while (temp != old_count);
+    } while (1);
+
     return txn;
 }
 

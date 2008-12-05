@@ -25,33 +25,4 @@ typedef struct map_impl {
     map_free_t   free_;
 } map_impl_t;
 
-typedef struct ht hashtable_t;
-typedef struct sl skiplist_t;
-typedef struct ll list_t;
-
-hashtable_t * ht_alloc (const datatype_t *key_type);
-skiplist_t *  sl_alloc (const datatype_t *key_type);
-list_t *      ll_alloc (const datatype_t *key_type);
-
-uint64_t ht_cas    (hashtable_t *ht, void *key, uint64_t expected_val, uint64_t val);
-uint64_t ht_get    (hashtable_t *ht, void *key);
-uint64_t ht_remove (hashtable_t *ht, void *key);
-uint64_t ht_count  (hashtable_t *ht);
-void     ht_print  (hashtable_t *ht);
-void     ht_free   (hashtable_t *ht);
-
-uint64_t sl_cas    (skiplist_t *sl, void *key, uint64_t expected_val, uint64_t new_val);
-uint64_t sl_lookup (skiplist_t *sl, void *key);
-uint64_t sl_remove (skiplist_t *sl, void *key);
-uint64_t sl_count  (skiplist_t *sl);
-void     sl_print  (skiplist_t *sl);
-void     sl_free   (skiplist_t *sl);
-
-uint64_t ll_cas    (list_t *ll, void *key, uint64_t expected_val, uint64_t new_val);
-uint64_t ll_lookup (list_t *ll, void *key);
-uint64_t ll_remove (list_t *ll, void *key);
-uint64_t ll_count  (list_t *ll);
-void     ll_print  (list_t *ll);
-void     ll_free   (list_t *ll);
-
 #endif//MLOCAL_H

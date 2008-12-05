@@ -7,6 +7,9 @@
 #include "nstring.h"
 #include "runtime.h"
 #include "map.h"
+#include "list.h"
+#include "skiplist.h"
+#include "hashtable.h"
 
 #define NUM_ITERATIONS 10000000
 

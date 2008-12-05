@@ -11,6 +11,7 @@
 
 #include "common.h"
 #include "mlocal.h"
+#include "list.h"
 #include "mem.h"
 
 typedef struct node {
@@ -252,8 +253,7 @@ uint64_t ll_remove (list_t *ll, void *key) {
         return DOES_NOT_EXIST;
     }
 
-    // Mark <item> removed. This must be atomic. If multiple threads try to remove the same item
-    // only one of them should succeed.
+    // Mark <item> removed. If multiple threads try to remove the same item only one of them should succeed.
     node_t *next;
     node_t *old_next = item->next;
     do {
@@ -267,7 +267,8 @@ uint64_t ll_remove (list_t *ll, void *key) {
     TRACE("l2", "ll_remove: logically removed item %p", item, 0);
     ASSERT(IS_TAGGED(item->next));
 
-    // This has to be an atomic swap in case another thread is updating the item while we are removing it. 
+    // Atomically swap out the item's value in case another thread is updating the item while we are 
+    // removing it. This establishes which operation occurs first logically, the update or the remove. 
     uint64_t val = SYNC_SWAP(&item->val, DOES_NOT_EXIST); 
     TRACE("l2", "ll_remove: replaced item's val %p with DOES_NOT_EXIT", val, 0);
 

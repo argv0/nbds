@@ -12,6 +12,9 @@
 #include "runtime.h"
 #include "nstring.h"
 #include "map.h"
+#include "list.h"
+#include "skiplist.h"
+#include "hashtable.h"
 #include "lwt.h"
 
 #define ASSERT_EQUAL(x, y) CuAssertIntEquals(tc, x, y)

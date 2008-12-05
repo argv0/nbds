@@ -8,8 +8,6 @@ typedef struct map map_t;
 typedef const struct map_impl *map_type_t;
 
 extern map_type_t MAP_TYPE_HASHTABLE;
-extern map_type_t MAP_TYPE_SKIPLIST;
-extern map_type_t MAP_TYPE_LIST;
 
 map_t *  map_alloc  (map_type_t map_type, const datatype_t *key_type);
 uint64_t map_get    (map_t *map, void *key);
