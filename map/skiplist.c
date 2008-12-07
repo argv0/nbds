@@ -231,6 +231,17 @@ uint64_t sl_lookup (skiplist_t *sl, void *key) {
     return DOES_NOT_EXIST;
 }
 
+void *sl_min_key (skiplist_t *sl) {
+    node_t *item = sl->head->next[0];
+    while (item != NULL) {
+        node_t *next = item->next[0];
+        if (!IS_TAGGED(next))
+            return item->key;
+        item = (node_t *)STRIP_TAG(next);
+    }
+    return DOES_NOT_EXIST;
+}
+
 uint64_t sl_cas (skiplist_t *sl, void *key, uint64_t expectation, uint64_t new_val) {
     TRACE("s1", "sl_cas: key %p skiplist %p", key, sl);
     TRACE("s1", "sl_cas: expectation %p new value %p", expectation, new_val);
