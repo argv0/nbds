@@ -52,7 +52,9 @@ uint64_t ll_count (list_t *ll) {
     uint64_t count = 0;
     node_t *item = ll->head->next;
     while (item) {
-        count++;
+        if (!IS_TAGGED(item->next)) {
+            count++;
+        }
         item = (node_t *)STRIP_TAG(item->next);
     }
     return count;
