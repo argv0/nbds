@@ -7,7 +7,7 @@
 OPT	   := -fwhole-program -combine -03 #-DNDEBUG
 CFLAGS := -g -Wall -Werror -std=c99 -m64 $(OPT) #-DENABLE_TRACE
 INCS   := $(addprefix -I, include)
-TESTS  := output/map_test1 output/map_test2 output/rcu_test output/txn_test
+TESTS  := output/map_test1 output/map_test2 output/txn_test
 EXES   := $(TESTS)
 
 RUNTIME_SRCS := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c datatype/nstring.c 

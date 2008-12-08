@@ -42,7 +42,7 @@ list_t *ll_alloc (const datatype_t *key_type) {
 void ll_free (list_t *ll) {
     node_t *item = ll->head->next;
     while (item) {
-        node_t *next = (node_t *)STRIP_TAG(item->next);
+        node_t *next = (node_t *)STRIP_TAG(item->next, TAG1);
         nbd_free(item);
         item = next;
     }
@@ -52,10 +52,10 @@ uint64_t ll_count (list_t *ll) {
     uint64_t count = 0;
     node_t *item = ll->head->next;
     while (item) {
-        if (!IS_TAGGED(item->next)) {
+        if (!IS_TAGGED(item->next, TAG1)) {
             count++;
         }
-        item = (node_t *)STRIP_TAG(item->next);
+        item = (node_t *)STRIP_TAG(item->next, TAG1);
     }
     return count;
 }
@@ -69,11 +69,11 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, void *ke
         node_t *next = item->next;
 
         // A tag means an item is logically removed but not physically unlinked yet.
-        while (EXPECT_FALSE(IS_TAGGED(next))) {
+        while (EXPECT_FALSE(IS_TAGGED(next, TAG1))) {
 
             // Skip over logically removed items.
             if (!help_remove) {
-                item = (node_t *)STRIP_TAG(item->next);
+                item = (node_t *)STRIP_TAG(item->next, TAG1);
                 if (EXPECT_FALSE(item == NULL))
                     break;
                 TRACE("l3", "find_pred: skipping marked item %p (next is %p)", item, next);
@@ -84,9 +84,9 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, void *ke
             // Unlink logically removed items.
             node_t *other;
             TRACE("l3", "find_pred: unlinking marked item %p next is %p", item, next);
-            if ((other = SYNC_CAS(&pred->next, item, STRIP_TAG(next))) == item) {
+            if ((other = SYNC_CAS(&pred->next, item, STRIP_TAG(next, TAG1))) == item) {
                 TRACE("l2", "find_pred: unlinked item %p from pred %p", item, pred);
-                item = (node_t *)STRIP_TAG(next);
+                item = (node_t *)STRIP_TAG(next, TAG1);
                 if (EXPECT_FALSE(item == NULL))
                     break;
                 next = item->next;
@@ -100,7 +100,7 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, void *ke
             } else {
                 TRACE("l2", "find_pred: lost a race to unlink item %p from pred %p", item, pred);
                 TRACE("l2", "find_pred: pred's link changed to %p", other, 0);
-                if (IS_TAGGED(other))
+                if (IS_TAGGED(other, TAG1))
                     return find_pred(pred_ptr, item_ptr, ll, key, help_remove); // retry
                 item = other;
                 if (EXPECT_FALSE(item == NULL))
@@ -252,14 +252,14 @@ uint64_t ll_remove (list_t *ll, void *key) {
     node_t *old_next = item->next;
     do {
         next = old_next;
-        old_next = SYNC_CAS(&item->next, next, TAG_VALUE(next));
-        if (IS_TAGGED(old_next)) {
+        old_next = SYNC_CAS(&item->next, next, TAG_VALUE(next, TAG1));
+        if (IS_TAGGED(old_next, TAG1)) {
             TRACE("l1", "ll_remove: lost a race -- %p is already marked for removal by another thread", item, 0);
             return DOES_NOT_EXIST;
         }
     } while (next != old_next);
     TRACE("l2", "ll_remove: logically removed item %p", item, 0);
-    ASSERT(IS_TAGGED(item->next));
+    ASSERT(IS_TAGGED(item->next, TAG1));
 
     // Atomically swap out the item's value in case another thread is updating the item while we are 
     // removing it. This establishes which operation occurs first logically, the update or the remove. 
@@ -291,12 +291,12 @@ void ll_print (list_t *ll) {
     int i = 0;
     while (item) {
         node_t *next = item->next;
-        if (IS_TAGGED(item)) {
+        if (IS_TAGGED(item, TAG1)) {
             printf("*");
         }
         printf("%p:%p ", item, item->key);
         fflush(stdout);
-        item = (node_t *)STRIP_TAG(next);
+        item = (node_t *)STRIP_TAG(next, TAG1);
         if (i++ > 30) {
             printf("...");
             break;

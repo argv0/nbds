@@ -74,7 +74,7 @@ skiplist_t *sl_alloc (const datatype_t *key_type) {
 void sl_free (skiplist_t *sl) {
     node_t *item = sl->head->next[0];
     while (item) {
-        node_t *next = (node_t *)STRIP_TAG(item->next[0]);
+        node_t *next = (node_t *)STRIP_TAG(item->next[0], TAG1);
         nbd_free(item);
         item = next;
     }
@@ -84,10 +84,10 @@ uint64_t sl_count (skiplist_t *sl) {
     uint64_t count = 0;
     node_t *item = sl->head->next[0];
     while (item) {
-        if (!IS_TAGGED(item->next[0])) {
+        if (!IS_TAGGED(item->next[0], TAG1)) {
             count++;
         }
-        item = (node_t *)STRIP_TAG(item->next[0]);
+        item = (node_t *)STRIP_TAG(item->next[0], TAG1);
     }
     return count;
 }
@@ -117,7 +117,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
     for (int level = start_level; level >= 0; --level) {
         TRACE("s3", "find_preds: level %llu", level, 0);
         item = pred->next[level];
-        if (EXPECT_FALSE(IS_TAGGED(item))) {
+        if (EXPECT_FALSE(IS_TAGGED(item, TAG1))) {
             TRACE("s2", "find_preds: pred %p is marked for removal (item %p); retry", pred, item);
             return find_preds(preds, succs, n, sl, key, help_remove); // retry
         }
@@ -125,11 +125,11 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
             node_t *next = item->next[level];
 
             // A tag means an item is logically removed but not physically unlinked yet.
-            while (EXPECT_FALSE(IS_TAGGED(next))) {
+            while (EXPECT_FALSE(IS_TAGGED(next, TAG1))) {
 
                 // Skip over logically removed items.
                 if (!help_remove) {
-                    item = (node_t *)STRIP_TAG(item->next);
+                    item = (node_t *)STRIP_TAG(item->next, TAG1);
                     if (EXPECT_FALSE(item == NULL))
                         break;
                     TRACE("s3", "find_preds: skipping marked item %p (next is %p)", item, next);
@@ -140,8 +140,8 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
                 // Unlink logically removed items.
                 node_t *other;
                 TRACE("s3", "find_preds: unlinking marked item %p; next is %p", item, next);
-                if ((other = SYNC_CAS(&pred->next[level], item, STRIP_TAG(next))) == item) {
-                    item = (node_t *)STRIP_TAG(next);
+                if ((other = SYNC_CAS(&pred->next[level], item, STRIP_TAG(next, TAG1))) == item) {
+                    item = (node_t *)STRIP_TAG(next, TAG1);
                     if (EXPECT_FALSE(item == NULL))
                         break;
                     next = item->next[level];
@@ -157,7 +157,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
                 } else {
                     TRACE("s3", "find_preds: lost race to unlink item %p from pred %p", item, pred);
                     TRACE("s3", "find_preds: pred's link changed to %p", other, 0);
-                    if (IS_TAGGED(other))
+                    if (IS_TAGGED(other, TAG1))
                         return find_preds(preds, succs, n, sl, key, help_remove); // retry
                     item = other;
                     if (EXPECT_FALSE(item == NULL))
@@ -170,7 +170,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
                 break;
 
             TRACE("s4", "find_preds: visiting item %p (next is %p)", item, next);
-            TRACE("s4", "find_preds: key %p val %p", STRIP_TAG(item->key), item->val);
+            TRACE("s4", "find_preds: key %p val %p", STRIP_TAG(item->key, TAG1), item->val);
 
             if (EXPECT_TRUE(sl->key_type == NULL)) {
                 d = (uint64_t)item->key - (uint64_t)key;
@@ -235,9 +235,9 @@ void *sl_min_key (skiplist_t *sl) {
     node_t *item = sl->head->next[0];
     while (item != NULL) {
         node_t *next = item->next[0];
-        if (!IS_TAGGED(next))
+        if (!IS_TAGGED(next, TAG1))
             return item->key;
-        item = (node_t *)STRIP_TAG(next);
+        item = (node_t *)STRIP_TAG(next, TAG1);
     }
     return DOES_NOT_EXIST;
 }
@@ -335,7 +335,7 @@ uint64_t sl_cas (skiplist_t *sl, void *key, uint64_t expectation, uint64_t new_v
             do {
                 // There in no need to continue linking in the item if another thread removed it.
                 node_t *old_next = ((volatile node_t *)new_item)->next[level];
-                if (IS_TAGGED(old_next))
+                if (IS_TAGGED(old_next, TAG1))
                     return DOES_NOT_EXIST; // success
 
                 // Use a CAS so we do not inadvertantly stomp on a mark another thread placed on the item.
@@ -363,17 +363,17 @@ uint64_t sl_remove (skiplist_t *sl, void *key) {
         node_t *old_next = item->next[level];
         do {
             next = old_next;
-            old_next = SYNC_CAS(&item->next[level], next, TAG_VALUE(next));
-            if (IS_TAGGED(old_next)) {
+            old_next = SYNC_CAS(&item->next[level], next, TAG_VALUE(next, TAG1));
+            if (IS_TAGGED(old_next, TAG1)) {
                 TRACE("s2", "sl_remove: %p is already marked for removal by another thread at level %llu", item, level);
                 break;
             }
         } while (next != old_next);
 
         node_t *pred = preds[level];
-        TRACE("s2", "sl_remove: linking the item's pred %p to the item's successor %p", pred, STRIP_TAG(next));
+        TRACE("s2", "sl_remove: linking the item's pred %p to the item's successor %p", pred, STRIP_TAG(next, TAG1));
         node_t *other = NULL;
-        if ((other = SYNC_CAS(&pred->next[level], item, STRIP_TAG(next))) != item) {
+        if ((other = SYNC_CAS(&pred->next[level], item, STRIP_TAG(next, TAG1))) != item) {
             TRACE("s1", "sl_remove: unlink failed; pred's link changed from %p to %p", item, other);
             // If our former predecessor now points past us we know another thread unlinked us. Otherwise, we need
             // to search for a new set of preds.
@@ -381,7 +381,7 @@ uint64_t sl_remove (skiplist_t *sl, void *key) {
                 continue; // <pred> points past <item> to the end of the list; go on to the next level.
 
             int d = -1;
-            if (!IS_TAGGED(other)) {
+            if (!IS_TAGGED(other, TAG1)) {
                 if (EXPECT_TRUE(sl->key_type == NULL)) {
                     d = (uint64_t)item->key - (uint64_t)other->key;
                 } else {
@@ -401,8 +401,8 @@ uint64_t sl_remove (skiplist_t *sl, void *key) {
     node_t *old_next = item->next[0];
     do {
         next = old_next;
-        old_next = SYNC_CAS(&item->next[0], next, TAG_VALUE(next));
-        if (IS_TAGGED(old_next)) {
+        old_next = SYNC_CAS(&item->next[0], next, TAG_VALUE(next, TAG1));
+        if (IS_TAGGED(old_next, TAG1)) {
             TRACE("s2", "sl_remove: %p is already marked for removal by another thread at level 0", item, 0);
             return DOES_NOT_EXIST;
         }
@@ -415,8 +415,8 @@ uint64_t sl_remove (skiplist_t *sl, void *key) {
     TRACE("s2", "sl_remove: replaced item %p's value with DOES_NOT_EXIT", item, 0);
 
     node_t *pred = preds[0];
-    TRACE("s2", "sl_remove: linking the item's pred %p to the item's successor %p", pred, STRIP_TAG(next));
-    if (SYNC_CAS(&pred->next[0], item, STRIP_TAG(next))) {
+    TRACE("s2", "sl_remove: linking the item's pred %p to the item's successor %p", pred, STRIP_TAG(next, TAG1));
+    if (SYNC_CAS(&pred->next[0], item, STRIP_TAG(next, TAG1))) {
         TRACE("s2", "sl_remove: unlinked item %p from the skiplist at level 0", item, 0);
         // The thread that completes the unlink should free the memory.
         if (sl->key_type != NULL) {
@@ -436,8 +436,8 @@ void sl_print (skiplist_t *sl) {
         int i = 0;
         while (item) {
             node_t *next = item->next[level];
-            printf("%s%p ", IS_TAGGED(next) ? "*" : "", item);
-            item = (node_t *)STRIP_TAG(next);
+            printf("%s%p ", IS_TAGGED(next, TAG1) ? "*" : "", item);
+            item = (node_t *)STRIP_TAG(next, TAG1);
             if (i++ > 30) {
                 printf("...");
                 break;
@@ -449,7 +449,7 @@ void sl_print (skiplist_t *sl) {
     node_t *item = sl->head;
     int i = 0;
     while (item) {
-        int is_marked = IS_TAGGED(item->next[0]);
+        int is_marked = IS_TAGGED(item->next[0], TAG1);
         printf("%s%p:%p ", is_marked ? "*" : "", item, item->key);
         if (item != sl->head) {
             printf("[%d]", item->top_level);
@@ -457,15 +457,15 @@ void sl_print (skiplist_t *sl) {
             printf("[HEAD]");
         }
         for (int level = 1; level <= item->top_level; ++level) {
-            node_t *next = (node_t *)STRIP_TAG(item->next[level]);
-            is_marked = IS_TAGGED(item->next[0]);
+            node_t *next = (node_t *)STRIP_TAG(item->next[level], TAG1);
+            is_marked = IS_TAGGED(item->next[0], TAG1);
             printf(" %p%s", next, is_marked ? "*" : "");
             if (item == sl->head && item->next[level] == NULL)
                 break;
         }
         printf("\n");
         fflush(stdout);
-        item = (node_t *)STRIP_TAG(item->next[0]);
+        item = (node_t *)STRIP_TAG(item->next[0], TAG1);
         if (i++ > 30) {
             printf("...\n");
             break;

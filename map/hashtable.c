@@ -42,7 +42,7 @@ struct ht {
 };
 
 static const uint64_t COPIED_VALUE           = -1;
-static const uint64_t TOMBSTONE              = STRIP_TAG(-1);
+static const uint64_t TOMBSTONE              = STRIP_TAG(-1, TAG1);
 
 static const unsigned ENTRIES_PER_BUCKET     = CACHE_LINE_SIZE/sizeof(entry_t);
 static const unsigned ENTRIES_PER_COPY_CHUNK = CACHE_LINE_SIZE/sizeof(entry_t)*2;
@@ -201,7 +201,7 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
     }
 
     // Tag the value in the old entry to indicate a copy is in progress.
-    ht1_ent_val = SYNC_FETCH_AND_OR(&ht1_ent->val, TAG_VALUE(0));
+    ht1_ent_val = SYNC_FETCH_AND_OR(&ht1_ent->val, TAG_VALUE(0, TAG1));
     TRACE("h2", "hti_copy_entry: tagged the value %p in old entry %p", ht1_ent_val, ht1_ent);
     if (ht1_ent_val == COPIED_VALUE) {
         TRACE("h1", "hti_copy_entry: entry %p already copied to table %p", ht1_ent, ht2);
@@ -213,7 +213,7 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
     void *key = (ht1->ht->key_type == NULL) ? (void *)ht1_ent_key : GET_PTR(ht1_ent_key);
 
     // The old table's dead entries don't need to be copied to the new table, but their keys need to be freed.
-    assert(COPIED_VALUE == TAG_VALUE(TOMBSTONE));
+    assert(COPIED_VALUE == TAG_VALUE(TOMBSTONE, TAG1));
     if (ht1_ent_val == TOMBSTONE) {
         TRACE("h1", "hti_copy_entry: entry %p old value was deleted, now freeing key %p", ht1_ent, key);
         if (EXPECT_FALSE(ht1->ht->key_type != NULL)) {
@@ -251,7 +251,7 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
     }
 
     // Copy the value to the entry in the new table.
-    ht1_ent_val = STRIP_TAG(ht1_ent_val);
+    ht1_ent_val = STRIP_TAG(ht1_ent_val, TAG1);
     uint64_t old_ht2_ent_val = SYNC_CAS(&ht2_ent->val, DOES_NOT_EXIST, ht1_ent_val);
 
     // If there is a nested copy in progress, we might have installed the key into a dead entry.
@@ -294,7 +294,7 @@ static uint64_t hti_cas (hti_t *hti, void *key, uint32_t key_hash, uint64_t expe
     TRACE("h1", "hti_cas: hti %p key %p", hti, key);
     TRACE("h1", "hti_cas: value %p expect %p", new, expected);
     assert(hti);
-    assert(!IS_TAGGED(new));
+    assert(!IS_TAGGED(new, TAG1));
     assert(key);
 
     int is_empty;
@@ -346,7 +346,7 @@ static uint64_t hti_cas (hti_t *hti, void *key, uint32_t key_hash, uint64_t expe
 
     // If the entry is in the middle of a copy, the copy must be completed first.
     uint64_t ent_val = ent->val;
-    if (EXPECT_FALSE(IS_TAGGED(ent_val))) {
+    if (EXPECT_FALSE(IS_TAGGED(ent_val, TAG1))) {
         if (ent_val != COPIED_VALUE) {
             int did_copy = hti_copy_entry(hti, ent, key_hash, ((volatile hti_t *)hti)->next);
             if (did_copy) {
@@ -413,7 +413,7 @@ static uint64_t hti_get (hti_t *hti, void *key, uint32_t key_hash) {
 
     // If the entry is being copied, finish the copy and retry on the next table.
     uint64_t ent_val = ent->val;
-    if (EXPECT_FALSE(IS_TAGGED(ent_val))) {
+    if (EXPECT_FALSE(IS_TAGGED(ent_val, TAG1))) {
         if (EXPECT_FALSE(ent_val != COPIED_VALUE)) {
             int did_copy = hti_copy_entry(hti, ent, key_hash, ((volatile hti_t *)hti)->next);
             if (did_copy) {
@@ -438,7 +438,7 @@ uint64_t ht_cas (hashtable_t *ht, void *key, uint64_t expected_val, uint64_t new
     TRACE("h2", "ht_cas: key %p ht %p", key, ht);
     TRACE("h2", "ht_cas: expected val %p new val %p", expected_val, new_val);
     assert(key != DOES_NOT_EXIST);
-    assert(!IS_TAGGED(new_val) && new_val != DOES_NOT_EXIST && new_val != TOMBSTONE);
+    assert(!IS_TAGGED(new_val, TAG1) && new_val != DOES_NOT_EXIST && new_val != TOMBSTONE);
 
     hti_t *hti = ht->hti;
 
@@ -538,7 +538,7 @@ void ht_free (hashtable_t *ht) {
     hti_t *hti = ht->hti;
     do {
         for (uint32_t i = 0; i < (1 << hti->scale); ++i) {
-            assert(hti->table[i].val == COPIED_VALUE || !IS_TAGGED(hti->table[i].val));
+            assert(hti->table[i].val == COPIED_VALUE || !IS_TAGGED(hti->table[i].val, TAG1));
             if (ht->key_type != NULL && hti->table[i].key != DOES_NOT_EXIST) {
                 nbd_free(GET_PTR(hti->table[i].key));
             }
