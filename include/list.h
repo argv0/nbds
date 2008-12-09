@@ -4,14 +4,21 @@
 #include "map.h"
 
 typedef struct ll list_t;
+typedef struct ll_iter ll_iter_t;
 
-list_t * ll_alloc  (const datatype_t *key_type);
-uint64_t ll_cas    (list_t *ll, void *key, uint64_t expected_val, uint64_t new_val);
-uint64_t ll_lookup (list_t *ll, void *key);
-uint64_t ll_remove (list_t *ll, void *key);
-uint64_t ll_count  (list_t *ll);
-void     ll_print  (list_t *ll);
-void     ll_free   (list_t *ll);
+list_t * ll_alloc   (const datatype_t *key_type);
+uint64_t ll_cas     (list_t *ll, void *key, uint64_t expected_val, uint64_t new_val);
+uint64_t ll_lookup  (list_t *ll, void *key);
+uint64_t ll_remove  (list_t *ll, void *key);
+uint64_t ll_count   (list_t *ll);
+void     ll_print   (list_t *ll);
+void     ll_free    (list_t *ll);
+void *   ll_min_key (list_t *sl);
+
+ll_iter_t *ll_iter_start (list_t *ll, void *key);
+ll_iter_t *ll_iter_next  (ll_iter_t *iter);
+uint64_t   ll_iter_val   (ll_iter_t *iter);
+void *     ll_iter_key   (ll_iter_t *iter);
 
 static const map_impl_t ll_map_impl = { 
     (map_alloc_t)ll_alloc, (map_cas_t)ll_cas, (map_get_t)ll_lookup, (map_remove_t)ll_remove, 

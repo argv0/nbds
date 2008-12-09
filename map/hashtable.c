@@ -20,7 +20,7 @@
 
 #define GET_PTR(x) ((void *)((x) & MASK(48))) // low-order 48 bits is a pointer to a nstring_t
 
-typedef struct ht_entry {
+typedef struct entry {
     uint64_t key;
     uint64_t val;
 } entry_t;
@@ -29,12 +29,20 @@ typedef struct hti {
     volatile entry_t *table;
     hashtable_t *ht; // parent ht;
     struct hti *next;
-    unsigned int scale;
+    unsigned scale;
     int max_probe;
+    int references;
     int count; // TODO: make these counters distributed
     int num_entries_copied;
-    int scan;
+    int copy_scan;
 } hti_t;
+
+struct ht_iter {
+    hti_t *  hti;
+    int64_t  idx;
+    uint64_t key;
+    uint64_t val;
+};
 
 struct ht {
     hti_t *hti;
@@ -117,15 +125,13 @@ static volatile entry_t *hti_lookup (hti_t *hti, void *key, uint32_t key_hash, i
 
 // Allocate and initialize a hti_t with 2^<scale> entries.
 static hti_t *hti_alloc (hashtable_t *parent, int scale) {
-    // Include enough slop to align the actual table on a cache line boundry
-    size_t n = sizeof(hti_t) 
-             + sizeof(entry_t) * (1 << scale) 
-             + (CACHE_LINE_SIZE - 1);
-    hti_t *hti = (hti_t *)calloc(n, 1);
+    hti_t *hti = (hti_t *)nbd_malloc(sizeof(hti_t));
+    memset(hti, 0, sizeof(hti_t));
 
-    // Align the table of hash entries on a cache line boundry.
-    hti->table = (entry_t *)(((uint64_t)hti + sizeof(hti_t) + (CACHE_LINE_SIZE-1)) 
-                            & ~(CACHE_LINE_SIZE-1));
+    size_t sz = sizeof(entry_t) * (1 << scale);
+    entry_t *table = nbd_malloc(sz);
+    memset(table, 0, sz);
+    hti->table = table;
 
     hti->scale = scale;
 
@@ -432,24 +438,16 @@ uint64_t ht_get (hashtable_t *ht, void *key) {
     return hti_get(ht->hti, key, hash);
 }
 
-//
-uint64_t ht_cas (hashtable_t *ht, void *key, uint64_t expected_val, uint64_t new_val) {
+// returns TRUE if copy is done
+int hti_help_copy (hti_t *hti) {
+    volatile entry_t *ent;
+    uint64_t limit; 
+    uint64_t total_copied = hti->num_entries_copied;
+    int num_copied = 0;
+    int x = hti->copy_scan; 
 
-    TRACE("h2", "ht_cas: key %p ht %p", key, ht);
-    TRACE("h2", "ht_cas: expected val %p new val %p", expected_val, new_val);
-    assert(key != DOES_NOT_EXIST);
-    assert(!IS_TAGGED(new_val, TAG1) && new_val != DOES_NOT_EXIST && new_val != TOMBSTONE);
-
-    hti_t *hti = ht->hti;
-
-    // Help with an ongoing copy.
-    if (EXPECT_FALSE(hti->next != NULL)) {
-        volatile entry_t *ent;
-        uint64_t limit; 
-        int num_copied = 0;
-        int x = hti->scan; 
-
-        TRACE("h1", "ht_cas: help copy. scan is %llu, size is %llu", x, 1<<hti->scale);
+    TRACE("h1", "ht_cas: help copy. scan is %llu, size is %llu", x, 1<<hti->scale);
+    if (total_copied == (1 << hti->scale)) {
         // Panic if we've been around the array twice and still haven't finished the copy.
         int panic = (x >= (1 << (hti->scale + 1))); 
         if (!panic) {
@@ -457,9 +455,9 @@ uint64_t ht_cas (hashtable_t *ht, void *key, uint64_t expected_val, uint64_t new
 
             // Reserve some entries for this thread to copy. There is a race condition here because the
             // fetch and add isn't atomic, but that is ok.
-            hti->scan = x + ENTRIES_PER_COPY_CHUNK; 
+            hti->copy_scan = x + ENTRIES_PER_COPY_CHUNK; 
 
-            // <hti->scan> might be larger than the size of the table, if some thread stalls while 
+            // <copy_scan> might be larger than the size of the table, if some thread stalls while 
             // copying. In that case we just wrap around to the begining and make another pass through
             // the table.
             ent = hti->table + (x & MASK(hti->scale));
@@ -476,14 +474,37 @@ uint64_t ht_cas (hashtable_t *ht, void *key, uint64_t expected_val, uint64_t new
             assert(ent <= hti->table + (1 << hti->scale));
         }
         if (num_copied != 0) {
-            SYNC_ADD(&hti->num_entries_copied, num_copied);
+            total_copied = SYNC_ADD(&hti->num_entries_copied, num_copied);
         }
+    }
+
+    return (total_copied == (1 << hti->scale));
+}
+
+//
+uint64_t ht_cas (hashtable_t *ht, void *key, uint64_t expected_val, uint64_t new_val) {
+
+    TRACE("h2", "ht_cas: key %p ht %p", key, ht);
+    TRACE("h2", "ht_cas: expected val %p new val %p", expected_val, new_val);
+    assert(key != DOES_NOT_EXIST);
+    assert(!IS_TAGGED(new_val, TAG1) && new_val != DOES_NOT_EXIST && new_val != TOMBSTONE);
+
+    hti_t *hti = ht->hti;
+
+    // Help with an ongoing copy.
+    if (EXPECT_FALSE(hti->next != NULL)) {
+        int done = hti_help_copy(hti);
 
         // Dispose of fully copied tables.
-        if (hti->num_entries_copied == (1 << hti->scale) || panic) {
-            assert(hti->next);
-            if (SYNC_CAS(&ht->hti, hti, hti->next) == hti) {
-                nbd_defer_free(hti); 
+        if (done && hti->references == 0) {
+
+            int r = SYNC_CAS(&hti->references, 0, -1);
+            if (r == 0) {
+                assert(hti->next);
+                if (SYNC_CAS(&ht->hti, hti, hti->next) == hti) {
+                    nbd_defer_free((void *)hti->table); 
+                    nbd_defer_free(hti); 
+                }
             }
         }
     }
@@ -544,6 +565,7 @@ void ht_free (hashtable_t *ht) {
             }
         }
         hti_t *next = hti->next;
+        nbd_free((void *)hti->table);
         nbd_free(hti);
         hti = next;
     } while (hti);
@@ -565,3 +587,70 @@ void ht_print (hashtable_t *ht) {
         hti = hti->next;
     }
 }
+
+ht_iter_t *ht_iter_start (hashtable_t *ht, void *key) {
+    hti_t *hti = ht->hti;
+    int rcount;
+    do {
+        while (((volatile hti_t *)hti)->next != NULL) {
+            do { } while (hti_help_copy(hti) != TRUE);
+            hti = hti->next;
+        }
+
+        int old = hti->references;
+        do {
+            rcount = old;
+            if (rcount != -1) {
+                old = SYNC_CAS(&hti->references, rcount, rcount + 1);
+            }
+        } while (rcount != old);
+    } while (rcount == -1);
+
+    ht_iter_t *iter = nbd_malloc(sizeof(ht_iter_t));
+    iter->hti = hti;
+    iter->idx = -1;
+
+    return iter;
+}
+
+ht_iter_t *ht_iter_next (ht_iter_t *iter) {
+    volatile entry_t *ent;
+    uint64_t key;
+    uint64_t val;
+    uint64_t table_size = (1 << iter->hti->scale);
+    do {
+        if (++iter->idx == table_size) {
+            ht_iter_free(iter);
+            return NULL;
+        }
+        ent = &iter->hti->table[++iter->idx];
+        key = ent->key;
+        val = ent->val;
+
+    } while (key == DOES_NOT_EXIST || val == DOES_NOT_EXIST || val == TOMBSTONE);
+
+    iter->key = key;
+    if (val == COPIED_VALUE) {
+        uint32_t hash = (iter->hti->ht->key_type == NULL) 
+                      ? murmur32_8b(key)
+                      : iter->hti->ht->key_type->hash((void *)key);
+        iter->val = hti_get(iter->hti->next, (void *)ent->key, hash);
+    } else {
+        iter->val = val;
+    }
+
+    return iter;
+}
+
+uint64_t ht_iter_val (ht_iter_t *iter) {
+    return iter->val;
+}
+
+uint64_t ht_iter_key (ht_iter_t *iter) {
+    return iter->key;
+}
+
+void ht_iter_free (ht_iter_t *iter) {
+    SYNC_ADD(&iter->hti->references, -1);
+}
+

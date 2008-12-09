@@ -13,11 +13,13 @@
 #include "list.h"
 #include "mem.h"
 
-typedef struct node {
+typedef struct ll_iter node_t;
+
+struct ll_iter {
     void *key;
     uint64_t val;
-    struct node *next;
-} node_t;
+    node_t *next;
+};
 
 struct ll {
     node_t *head;
@@ -303,4 +305,31 @@ void ll_print (list_t *ll) {
         }
     }
     printf("\n");
+}
+
+ll_iter_t *ll_iter_start (list_t *ll, void *key) {
+    node_t *item;
+    find_pred(NULL, &item, ll, key, FALSE);
+    return item;
+}
+
+ll_iter_t *ll_iter_next (ll_iter_t *iter) {
+    assert(iter);
+    if (EXPECT_FALSE(!iter))
+        return NULL;
+
+    node_t *next = iter->next;
+    while (next != NULL && IS_TAGGED(next->next, TAG1)) {
+        next = (node_t *)STRIP_TAG(next->next, TAG1);
+    }
+
+    return next;
+}
+
+uint64_t ll_iter_val (ll_iter_t *iter) {
+    return iter->val;
+}
+
+void *ll_iter_key (ll_iter_t *iter) {
+    return iter->key;
 }

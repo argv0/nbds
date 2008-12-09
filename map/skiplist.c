@@ -28,12 +28,14 @@
 // Setting MAX_LEVEL to 0 essentially makes this data structure the Harris-Michael lock-free list (in list.c).
 #define MAX_LEVEL 31
 
-typedef struct node {
+typedef struct sl_iter node_t;
+
+struct sl_iter {
     void *key;
     uint64_t val;
     int top_level;
-    struct node *next[];
-} node_t;
+    node_t *next[];
+};
 
 struct sl {
     node_t *head;
@@ -471,4 +473,31 @@ void sl_print (skiplist_t *sl) {
             break;
         }
     }
+}
+
+sl_iter_t *sl_iter_start (skiplist_t *sl, void *key) {
+    node_t *item;
+    find_preds(NULL, &item, 0, sl, key, FALSE);
+    return item;
+}
+
+sl_iter_t *sl_iter_next (sl_iter_t *iter) {
+    assert(iter);
+    if (EXPECT_FALSE(!iter))
+        return NULL;
+
+    node_t *next = iter->next[0];
+    while (next != NULL && IS_TAGGED(next->next[0], TAG1)) {
+        next = (node_t *)STRIP_TAG(next->next[0], TAG1);
+    }
+
+    return next;
+}
+
+uint64_t sl_iter_val (sl_iter_t *iter) {
+    return iter->val;
+}
+
+void *sl_iter_key (sl_iter_t *iter) {
+    return iter->key;
 }

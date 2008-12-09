@@ -53,6 +53,7 @@ void txn_init (void) {
 // complete validating. It must be finished before we can decide to rollback or commit.
 //
 static txn_state_e tm_validate_key (txn_t *txn, void *key) {
+    assert(txn->state != TXN_RUNNING);
     
     update_t *update = (update_t *) map_get(txn->map, key);
     for (; update != NULL; update = update->next) {
@@ -111,6 +112,7 @@ static txn_state_e tm_validate_key (txn_t *txn, void *key) {
 }
 
 static txn_state_e txn_validate (txn_t *txn) {
+    assert(txn->state != TXN_RUNNING);
     int i;
     switch (txn->state) {
 
@@ -126,6 +128,7 @@ static txn_state_e txn_validate (txn_t *txn) {
                     txn->state = TXN_ABORTED;
                     break;
                 }
+                assert(s == TXN_VALIDATED);
             }
             if (txn->state == TXN_VALIDATING) {
                 txn->state =  TXN_VALIDATED;
@@ -186,6 +189,8 @@ txn_t *txn_begin (txn_type_e type, map_t *map) {
 }
 
 void txn_abort (txn_t *txn) {
+    if (txn->state != TXN_RUNNING)
+        return; // TODO: return some sort of error code
 
     int i;
     for (i = 0; i < txn->writes_count; ++i) {
@@ -198,6 +203,8 @@ void txn_abort (txn_t *txn) {
 }
 
 txn_state_e txn_commit (txn_t *txn) {
+    if (txn->state != TXN_RUNNING)
+        return txn->state; // TODO: return some sort of error code
 
     assert(txn->state == TXN_RUNNING);
     txn->state = TXN_VALIDATING;
@@ -231,6 +238,8 @@ txn_state_e txn_commit (txn_t *txn) {
 
 // Get most recent committed version prior to our read version.
 uint64_t tm_get (txn_t *txn, void *key) {
+    if (txn->state != TXN_RUNNING)
+        return ERROR_TXN_NOT_RUNNING;
 
     update_t *newest_update = (update_t *) map_get(txn->map, key);
     if (!IS_TAGGED(newest_update, TAG2))
@@ -341,6 +350,8 @@ uint64_t tm_get (txn_t *txn, void *key) {
 }
 
 void tm_set (txn_t *txn, void *key, uint64_t value) {
+    if (txn->state != TXN_RUNNING)
+        return; // TODO: return some sort of error code
 
     // create a new update record
     update_t *update = alloc_update_rec();

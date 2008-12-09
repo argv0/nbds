@@ -21,7 +21,7 @@ void test1 (CuTest* tc) {
     ASSERT_EQUAL( 3, tm_get(t1, k1) );
     ASSERT_EQUAL( 4, tm_get(t2, k1) );
     ASSERT_EQUAL( TXN_VALIDATED, txn_commit(t2));
-    ASSERT_EQUAL( TXN_ABORTED, txn_commit(t1));
+    ASSERT_EQUAL( TXN_ABORTED,   txn_commit(t1));
 }
 
 int main (void) {

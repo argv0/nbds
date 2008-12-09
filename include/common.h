@@ -12,6 +12,7 @@
 #include <sys/types.h>
 
 #define malloc "DON'T USE MALLOC" // use nbd_malloc() instead
+#define calloc "DON'T USE CALLOC" // use nbd_malloc() instead
 #define free   "DON'T USE FREE"   // use nbd_free() instead
 
 #define MAX_NUM_THREADS 4 // make this whatever you want, but make it a power of 2
@@ -41,6 +42,7 @@
 #define ERROR_INVALID_OPTION (-1)
 #define ERROR_INVALID_ARGUMENT (-2)
 #define ERROR_UNSUPPORTED_FEATURE (-3)
+#define ERROR_TXN_NOT_RUNNING (-4)
 
 typedef unsigned long long uint64_t;
 typedef unsigned int       uint32_t;
