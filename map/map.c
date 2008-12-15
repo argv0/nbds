@@ -34,42 +34,42 @@ void map_print (map_t *map) {
     map->impl->print(map->data);
 }
 
-uint64_t map_count (map_t *map) {
+map_val_t map_count (map_t *map) {
     return map->impl->count(map->data);
 }
 
-uint64_t map_get (map_t *map, void *key) {
+map_val_t map_get (map_t *map, map_key_t key) {
     return map->impl->get(map->data, key);
 }
 
-uint64_t map_set (map_t *map, void *key, uint64_t new_val) {
+map_val_t map_set (map_t *map, map_key_t key, map_val_t new_val) {
     return map->impl->cas(map->data, key, CAS_EXPECT_WHATEVER, new_val);
 }
 
-uint64_t map_add (map_t *map, void *key, uint64_t new_val) {
+map_val_t map_add (map_t *map, map_key_t key, map_val_t new_val) {
     return map->impl->cas(map->data, key, CAS_EXPECT_DOES_NOT_EXIST, new_val);
 }
 
-uint64_t map_cas (map_t *map, void *key, uint64_t expected_val, uint64_t new_val) {
+map_val_t map_cas (map_t *map, map_key_t key, map_val_t expected_val, map_val_t new_val) {
     return map->impl->cas(map->data, key, expected_val, new_val);
 }
 
-uint64_t map_replace(map_t *map, void *key, uint64_t new_val) {
+map_val_t map_replace(map_t *map, map_key_t key, map_val_t new_val) {
     return map->impl->cas(map->data, key, CAS_EXPECT_EXISTS, new_val);
 }
 
-uint64_t map_remove (map_t *map, void *key) {
+map_val_t map_remove (map_t *map, map_key_t key) {
     return map->impl->remove(map->data, key);
 }
 
-map_iter_t * map_iter_begin (map_t *map, void *key) {
+map_iter_t * map_iter_begin (map_t *map, map_key_t key) {
     map_iter_t *iter = nbd_malloc(sizeof(map_iter_t));
     iter->impl  = map->impl;
     iter->state = map->impl->iter_begin(map->data, key);
     return iter;
 }
 
-uint64_t map_iter_next (map_iter_t *iter, void **key_ptr) {
+map_val_t map_iter_next (map_iter_t *iter, map_key_t *key_ptr) {
     return iter->impl->iter_next(iter->state, key_ptr);
 }
 

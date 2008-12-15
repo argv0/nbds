@@ -16,8 +16,8 @@
 typedef struct ll_iter node_t;
 
 struct ll_iter {
-    void *key;
-    uint64_t val;
+    map_key_t key;
+    map_val_t val;
     node_t *next;
 };
 
@@ -26,7 +26,7 @@ struct ll {
     const datatype_t *key_type;
 };
 
-static node_t *node_alloc (void *key, uint64_t val) {
+static node_t *node_alloc (map_key_t key, map_val_t val) {
     node_t *item = (node_t *)nbd_malloc(sizeof(node_t));
     item->key = key;
     item->val = val;
@@ -62,7 +62,7 @@ uint64_t ll_count (list_t *ll) {
     return count;
 }
 
-static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, void *key, int help_remove) {
+static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_t key, int help_remove) {
     node_t *pred = ll->head;
     node_t *item = pred->next;
     TRACE("l2", "find_pred: searching for key %p in list (head is %p)", key, pred);
@@ -152,14 +152,14 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, void *ke
 }
 
 // Fast find. Do not help unlink partially removed nodes and do not return the found item's predecessor.
-uint64_t ll_lookup (list_t *ll, void *key) {
+map_val_t ll_lookup (list_t *ll, map_key_t key) {
     TRACE("l1", "ll_lookup: searching for key %p in list %p", key, ll);
     node_t *item;
     int found = find_pred(NULL, &item, ll, key, FALSE);
 
     // If we found an <item> matching the key return its value.
     if (found) {
-        uint64_t val = item->val;
+        map_val_t val = item->val;
         if (val != DOES_NOT_EXIST) {
             TRACE("l1", "ll_lookup: found item %p. val %p. returning item", item, item->val);
             return val;
@@ -170,7 +170,7 @@ uint64_t ll_lookup (list_t *ll, void *key) {
     return DOES_NOT_EXIST;
 }
 
-uint64_t ll_cas (list_t *ll, void *key, uint64_t expectation, uint64_t new_val) {
+map_val_t ll_cas (list_t *ll, map_key_t key, map_val_t expectation, map_val_t new_val) {
     TRACE("l1", "ll_cas: key %p list %p", key, ll);
     TRACE("l1", "ll_cas: expectation %p new value %p", expectation, new_val);
     ASSERT((int64_t)new_val > 0);
@@ -190,7 +190,7 @@ uint64_t ll_cas (list_t *ll, void *key, uint64_t expectation, uint64_t new_val) 
 
             // Create a new item and insert it into the list.
             TRACE("l2", "ll_cas: attempting to insert item between %p and %p", pred, pred->next);
-            void *new_key  = (ll->key_type == NULL) ? key : ll->key_type->clone(key);
+            map_key_t new_key  = (ll->key_type == NULL) ? key : ll->key_type->clone(key);
             node_t *new_item = node_alloc(new_key, new_val);
             node_t *next = new_item->next = old_item;
             node_t *other = SYNC_CAS(&pred->next, next, new_item);
@@ -209,7 +209,7 @@ uint64_t ll_cas (list_t *ll, void *key, uint64_t expectation, uint64_t new_val) 
         }
 
         // Found an item in the list that matches the key.
-        uint64_t old_item_val = old_item->val;
+        map_val_t old_item_val = old_item->val;
         do {
             // If the item's value is DOES_NOT_EXIST it means another thread removed the node out from under us.
             if (EXPECT_FALSE(old_item_val == DOES_NOT_EXIST)) {
@@ -227,7 +227,7 @@ uint64_t ll_cas (list_t *ll, void *key, uint64_t expectation, uint64_t new_val) 
             // replace DOES_NOT_EXIST with our value. Then another thread that is updating the value could think it
             // succeeded and return our value even though we indicated that the node has been removed. If the CAS 
             // fails it means another thread either removed the node or updated its value.
-            uint64_t ret_val = SYNC_CAS(&old_item->val, old_item_val, new_val);
+            map_val_t ret_val = SYNC_CAS(&old_item->val, old_item_val, new_val);
             if (ret_val == old_item_val) {
                 TRACE("l1", "ll_cas: the CAS succeeded. updated the value of the item", 0, 0);
                 return ret_val; // success
@@ -239,7 +239,7 @@ uint64_t ll_cas (list_t *ll, void *key, uint64_t expectation, uint64_t new_val) 
     } while (1);
 }
 
-uint64_t ll_remove (list_t *ll, void *key) {
+map_val_t ll_remove (list_t *ll, map_key_t key) {
     TRACE("l1", "ll_remove: removing item with key %p from list %p", key, ll);
     node_t *pred;
     node_t *item;
@@ -265,7 +265,7 @@ uint64_t ll_remove (list_t *ll, void *key) {
 
     // Atomically swap out the item's value in case another thread is updating the item while we are 
     // removing it. This establishes which operation occurs first logically, the update or the remove. 
-    uint64_t val = SYNC_SWAP(&item->val, DOES_NOT_EXIST); 
+    map_val_t val = SYNC_SWAP(&item->val, DOES_NOT_EXIST); 
     TRACE("l2", "ll_remove: replaced item's val %p with DOES_NOT_EXIT", val, 0);
 
     // Unlink <item> from <ll>. If we lose a race to another thread just back off. It is safe to leave the
@@ -307,13 +307,13 @@ void ll_print (list_t *ll) {
     printf("\n");
 }
 
-ll_iter_t *ll_iter_begin (list_t *ll, void *key) {
+ll_iter_t *ll_iter_begin (list_t *ll, map_key_t key) {
     node_t *iter = node_alloc(0,0);
     find_pred(NULL, &iter->next, ll, key, FALSE);
     return iter;
 }
 
-uint64_t ll_iter_next (ll_iter_t *iter, void **key_ptr) {
+map_val_t ll_iter_next (ll_iter_t *iter, map_key_t *key_ptr) {
     assert(iter);
     node_t *item = iter->next;
     while (item != NULL && IS_TAGGED(item->next, TAG1)) {

@@ -7,15 +7,15 @@ typedef struct ht hashtable_t;
 typedef struct ht_iter ht_iter_t;
 
 hashtable_t * ht_alloc (const datatype_t *key_type);
-uint64_t ht_cas    (hashtable_t *ht, void *key, uint64_t expected_val, uint64_t val);
-uint64_t ht_get    (hashtable_t *ht, void *key);
-uint64_t ht_remove (hashtable_t *ht, void *key);
+uint64_t ht_cas    (hashtable_t *ht, map_key_t key, uint64_t expected_val, uint64_t val);
+uint64_t ht_get    (hashtable_t *ht, map_key_t key);
+uint64_t ht_remove (hashtable_t *ht, map_key_t key);
 uint64_t ht_count  (hashtable_t *ht);
 void     ht_print  (hashtable_t *ht);
 void     ht_free   (hashtable_t *ht);
 
-ht_iter_t * ht_iter_begin (hashtable_t *ht, void *key);
-uint64_t    ht_iter_next  (ht_iter_t *iter, void **key_ptr);
+ht_iter_t * ht_iter_begin (hashtable_t *ht, map_key_t key);
+uint64_t    ht_iter_next  (ht_iter_t *iter, map_key_t *key_ptr);
 void        ht_iter_free  (ht_iter_t *iter);
 
 static const map_impl_t ht_map_impl = { 

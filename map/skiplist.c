@@ -31,8 +31,8 @@
 typedef struct sl_iter node_t;
 
 struct sl_iter {
-    void *key;
-    uint64_t val;
+    map_key_t key;
+    map_val_t val;
     int top_level;
     node_t *next[];
 };
@@ -54,7 +54,7 @@ static int random_level (void) {
     return n;
 }
 
-static node_t *node_alloc (int level, void *key, uint64_t val) {
+static node_t *node_alloc (int level, map_key_t key, map_val_t val) {
     assert(level >= 0 && level <= MAX_LEVEL);
     size_t sz = sizeof(node_t) + (level + 1) * sizeof(node_t *);
     node_t *item = (node_t *)nbd_malloc(sz);
@@ -94,7 +94,7 @@ uint64_t sl_count (skiplist_t *sl) {
     return count;
 }
 
-static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl, void *key, int help_remove) {
+static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl, map_key_t key, int help_remove) {
     node_t *pred = sl->head;
     node_t *item = NULL;
     TRACE("s2", "find_preds: searching for key %p in skiplist (head is %p)", key, pred);
@@ -216,13 +216,13 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
 }
 
 // Fast find that does not help unlink partially removed nodes and does not return the node's predecessors.
-uint64_t sl_lookup (skiplist_t *sl, void *key) {
+map_val_t sl_lookup (skiplist_t *sl, map_key_t key) {
     TRACE("s1", "sl_lookup: searching for key %p in skiplist %p", key, sl);
     node_t *item = find_preds(NULL, NULL, 0, sl, key, FALSE);
 
     // If we found an <item> matching the <key> return its value.
     if (item != NULL) {
-        uint64_t val = item->val;
+        map_val_t val = item->val;
         if (val != DOES_NOT_EXIST) {
             TRACE("s1", "sl_lookup: found item %p. val %p. returning item", item, item->val);
             return val;
@@ -233,7 +233,7 @@ uint64_t sl_lookup (skiplist_t *sl, void *key) {
     return DOES_NOT_EXIST;
 }
 
-void *sl_min_key (skiplist_t *sl) {
+map_key_t sl_min_key (skiplist_t *sl) {
     node_t *item = sl->head->next[0];
     while (item != NULL) {
         node_t *next = item->next[0];
@@ -244,7 +244,7 @@ void *sl_min_key (skiplist_t *sl) {
     return DOES_NOT_EXIST;
 }
 
-uint64_t sl_cas (skiplist_t *sl, void *key, uint64_t expectation, uint64_t new_val) {
+map_val_t sl_cas (skiplist_t *sl, map_key_t key, map_val_t expectation, map_val_t new_val) {
     TRACE("s1", "sl_cas: key %p skiplist %p", key, sl);
     TRACE("s1", "sl_cas: expectation %p new value %p", expectation, new_val);
     ASSERT((int64_t)new_val > 0);
@@ -267,7 +267,7 @@ uint64_t sl_cas (skiplist_t *sl, void *key, uint64_t expectation, uint64_t new_v
 
             // First insert <new_item> into the bottom level.
             TRACE("s3", "sl_cas: attempting to insert item between %p and %p", preds[0], nexts[0]);
-            void *new_key  = (sl->key_type == NULL) ? key : sl->key_type->clone(key);
+            map_key_t new_key  = (sl->key_type == NULL) ? key : sl->key_type->clone(key);
             new_item = node_alloc(n, new_key, new_val);
             node_t *pred = preds[0];
             node_t *next = new_item->next[0] = nexts[0];
@@ -288,7 +288,7 @@ uint64_t sl_cas (skiplist_t *sl, void *key, uint64_t expectation, uint64_t new_v
         }
 
         // Found an item in the skiplist that matches the key.
-        uint64_t old_item_val = old_item->val;
+        map_val_t old_item_val = old_item->val;
         do {
             // If the item's value is DOES_NOT_EXIST it means another thread removed the node out from under us.
             if (EXPECT_FALSE(old_item_val == DOES_NOT_EXIST)) {
@@ -306,7 +306,7 @@ uint64_t sl_cas (skiplist_t *sl, void *key, uint64_t expectation, uint64_t new_v
             // replace DOES_NOT_EXIST with our value. Then another thread that is updating the value could think it
             // succeeded and return our value even though we indicated that the node has been removed. If the CAS 
             // fails it means another thread either removed the node or updated its value.
-            uint64_t ret_val = SYNC_CAS(&old_item->val, old_item_val, new_val);
+            map_val_t ret_val = SYNC_CAS(&old_item->val, old_item_val, new_val);
             if (ret_val == old_item_val) {
                 TRACE("s1", "sl_cas: the CAS succeeded. updated the value of the item", 0, 0);
                 return ret_val; // success
@@ -349,7 +349,7 @@ uint64_t sl_cas (skiplist_t *sl, void *key, uint64_t expectation, uint64_t new_v
     return DOES_NOT_EXIST; // success
 }
 
-uint64_t sl_remove (skiplist_t *sl, void *key) {
+map_val_t sl_remove (skiplist_t *sl, map_key_t key) {
     TRACE("s1", "sl_remove: removing item with key %p from skiplist %p", key, sl);
     node_t *preds[MAX_LEVEL+1];
     node_t *item = find_preds(preds, NULL, -1, sl, key, TRUE);
@@ -413,7 +413,7 @@ uint64_t sl_remove (skiplist_t *sl, void *key) {
 
     // Atomically swap out the item's value in case another thread is updating the item while we are 
     // removing it. This establishes which operation occurs first logically, the update or the remove. 
-    uint64_t val = SYNC_SWAP(&item->val, DOES_NOT_EXIST); 
+    map_val_t val = SYNC_SWAP(&item->val, DOES_NOT_EXIST); 
     TRACE("s2", "sl_remove: replaced item %p's value with DOES_NOT_EXIT", item, 0);
 
     node_t *pred = preds[0];
@@ -475,13 +475,13 @@ void sl_print (skiplist_t *sl) {
     }
 }
 
-sl_iter_t *sl_iter_begin (skiplist_t *sl, void *key) {
+sl_iter_t *sl_iter_begin (skiplist_t *sl, map_key_t key) {
     node_t *iter = node_alloc(0, 0, 0);
     find_preds(NULL, &iter->next[0], 0, sl, key, FALSE);
     return iter;
 }
 
-uint64_t sl_iter_next (sl_iter_t *iter, void **key_ptr) {
+map_val_t sl_iter_next (sl_iter_t *iter, map_key_t *key_ptr) {
     assert(iter);
     node_t *item = iter->next[0];
     while (item != NULL && IS_TAGGED(item->next[0], TAG1)) {

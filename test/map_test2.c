@@ -1,6 +1,9 @@
 /* 
  * Written by Josh Dybnis and released to the public domain, as explained at
  * http://creativecommons.org/licenses/publicdomain
+ *
+ * tests ported from high-scale-lib
+ * http://sourceforge.net/projects/high-scale-lib
  */
 #include <stdio.h>
 #include <pthread.h>

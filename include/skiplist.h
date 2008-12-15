@@ -7,16 +7,16 @@ typedef struct sl skiplist_t;
 typedef struct sl_iter sl_iter_t;
 
 skiplist_t * sl_alloc (const datatype_t *key_type);
-uint64_t sl_cas     (skiplist_t *sl, void *key, uint64_t expected_val, uint64_t new_val);
-uint64_t sl_lookup  (skiplist_t *sl, void *key);
-uint64_t sl_remove  (skiplist_t *sl, void *key);
-uint64_t sl_count   (skiplist_t *sl);
-void     sl_print   (skiplist_t *sl);
-void     sl_free    (skiplist_t *sl);
-void *   sl_min_key (skiplist_t *sl);
+map_val_t  sl_cas     (skiplist_t *sl, map_key_t key, map_val_t expected_val, map_val_t new_val);
+map_val_t  sl_lookup  (skiplist_t *sl, map_key_t key);
+map_val_t  sl_remove  (skiplist_t *sl, map_key_t key);
+map_val_t  sl_count   (skiplist_t *sl);
+void       sl_print   (skiplist_t *sl);
+void       sl_free    (skiplist_t *sl);
+map_key_t  sl_min_key (skiplist_t *sl);
 
-sl_iter_t * sl_iter_begin (skiplist_t *sl, void *key);
-uint64_t    sl_iter_next  (sl_iter_t *iter, void **key_ptr);
+sl_iter_t * sl_iter_begin (skiplist_t *sl, map_key_t key);
+map_val_t   sl_iter_next  (sl_iter_t *iter, map_key_t *key_ptr);
 void        sl_iter_free  (sl_iter_t *iter);
 
 static const map_impl_t sl_map_impl = { 
