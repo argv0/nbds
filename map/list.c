@@ -307,29 +307,29 @@ void ll_print (list_t *ll) {
     printf("\n");
 }
 
-ll_iter_t *ll_iter_start (list_t *ll, void *key) {
-    node_t *item;
-    find_pred(NULL, &item, ll, key, FALSE);
-    return item;
+ll_iter_t *ll_iter_begin (list_t *ll, void *key) {
+    node_t *iter = node_alloc(0,0);
+    find_pred(NULL, &iter->next, ll, key, FALSE);
+    return iter;
 }
 
-ll_iter_t *ll_iter_next (ll_iter_t *iter) {
+uint64_t ll_iter_next (ll_iter_t *iter, void **key_ptr) {
     assert(iter);
-    if (EXPECT_FALSE(!iter))
-        return NULL;
-
-    node_t *next = iter->next;
-    while (next != NULL && IS_TAGGED(next->next, TAG1)) {
-        next = (node_t *)STRIP_TAG(next->next, TAG1);
+    node_t *item = iter->next;
+    while (item != NULL && IS_TAGGED(item->next, TAG1)) {
+        item = (node_t *)STRIP_TAG(item->next, TAG1);
     }
-
-    return next;
+    if (item == NULL) {
+        iter->next = NULL;
+        return DOES_NOT_EXIST;
+    }
+    iter->next = item->next;
+    if (key_ptr != NULL) {
+        *key_ptr = item->key;
+    }
+    return item->val;
 }
 
-uint64_t ll_iter_val (ll_iter_t *iter) {
-    return iter->val;
-}
-
-void *ll_iter_key (ll_iter_t *iter) {
-    return iter->key;
+void ll_iter_free (ll_iter_t *iter) {
+    nbd_free(iter);
 }

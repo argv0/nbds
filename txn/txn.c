@@ -32,7 +32,6 @@ struct txn {
     uint32_t writes_size;
     uint32_t writes_count;
     uint32_t writes_scan;
-    txn_type_e type;
     txn_state_e state;
 };
 
@@ -52,7 +51,7 @@ void txn_init (void) {
 // If we encounter a potential conflict with a transaction that is in the process of validating, we help it 
 // complete validating. It must be finished before we can decide to rollback or commit.
 //
-static txn_state_e tm_validate_key (txn_t *txn, void *key) {
+static txn_state_e validate_key (txn_t *txn, void *key) {
     assert(txn->state != TXN_RUNNING);
     
     update_t *update = (update_t *) map_get(txn->map, key);
@@ -123,7 +122,7 @@ static txn_state_e txn_validate (txn_t *txn) {
             }
 
             for (i = 0; i < txn->writes_count; ++i) {
-                txn_state_e s = tm_validate_key(txn, txn->writes[i].key);
+                txn_state_e s = validate_key(txn, txn->writes[i].key);
                 if (s == TXN_ABORTED) {
                     txn->state = TXN_ABORTED;
                     break;
@@ -152,17 +151,14 @@ static update_t *alloc_update_rec (void) {
     return u;
 }
 
-txn_t *txn_begin (txn_type_e type, map_t *map) {
+txn_t *txn_begin (map_t *map) {
     txn_t *txn = (txn_t *)nbd_malloc(sizeof(txn_t));
     memset(txn, 0, sizeof(txn_t));
-    txn->type = type;
     txn->wv = UNDETERMINED_VERSION;
     txn->state = TXN_RUNNING;
     txn->map = map;
-    if (type != TXN_READ_ONLY) {
-        txn->writes = nbd_malloc(sizeof(*txn->writes) * INITIAL_WRITES_SIZE);
-        txn->writes_size = INITIAL_WRITES_SIZE;
-    }
+    txn->writes = nbd_malloc(sizeof(*txn->writes) * INITIAL_WRITES_SIZE);
+    txn->writes_size = INITIAL_WRITES_SIZE;
 
     // acquire the read version for txn. must be careful to avoid a race
     do {
@@ -237,7 +233,7 @@ txn_state_e txn_commit (txn_t *txn) {
 }
 
 // Get most recent committed version prior to our read version.
-uint64_t tm_get (txn_t *txn, void *key) {
+uint64_t txn_map_get (txn_t *txn, void *key) {
     if (txn->state != TXN_RUNNING)
         return ERROR_TXN_NOT_RUNNING;
 
@@ -349,7 +345,7 @@ uint64_t tm_get (txn_t *txn, void *key) {
     return value;
 }
 
-void tm_set (txn_t *txn, void *key, uint64_t value) {
+void txn_map_set (txn_t *txn, void *key, uint64_t value) {
     if (txn->state != TXN_RUNNING)
         return; // TODO: return some sort of error code
 

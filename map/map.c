@@ -14,6 +14,11 @@ struct map {
     void *data;
 };
 
+struct map_iter {
+    const map_impl_t *impl;
+    void *state;
+};
+
 map_t *map_alloc (const map_impl_t *map_impl, const datatype_t *key_type) { 
     map_t *map = nbd_malloc(sizeof(map_t)); 
     map->impl  = map_impl;
@@ -55,4 +60,20 @@ uint64_t map_replace(map_t *map, void *key, uint64_t new_val) {
 
 uint64_t map_remove (map_t *map, void *key) {
     return map->impl->remove(map->data, key);
+}
+
+map_iter_t * map_iter_begin (map_t *map, void *key) {
+    map_iter_t *iter = nbd_malloc(sizeof(map_iter_t));
+    iter->impl  = map->impl;
+    iter->state = map->impl->iter_begin(map->data, key);
+    return iter;
+}
+
+uint64_t map_iter_next (map_iter_t *iter, void **key_ptr) {
+    return iter->impl->iter_next(iter->state, key_ptr);
+}
+
+void map_iter_free (map_iter_t *iter) {
+    iter->impl->iter_free(iter->state);
+    nbd_free(iter);
 }

@@ -447,7 +447,7 @@ int hti_help_copy (hti_t *hti) {
     int x = hti->copy_scan; 
 
     TRACE("h1", "ht_cas: help copy. scan is %llu, size is %llu", x, 1<<hti->scale);
-    if (total_copied == (1 << hti->scale)) {
+    if (total_copied != (1 << hti->scale)) {
         // Panic if we've been around the array twice and still haven't finished the copy.
         int panic = (x >= (1 << (hti->scale + 1))); 
         if (!panic) {
@@ -464,8 +464,8 @@ int hti_help_copy (hti_t *hti) {
         } else {
             TRACE("h1", "ht_cas: help copy panic", 0, 0);
             // scan the whole table
-            limit = (1 << hti->scale);
             ent = hti->table;
+            limit = (1 << hti->scale);
         }
 
         // Copy the entries
@@ -588,7 +588,8 @@ void ht_print (hashtable_t *ht) {
     }
 }
 
-ht_iter_t *ht_iter_start (hashtable_t *ht, void *key) {
+ht_iter_t *ht_iter_begin (hashtable_t *ht, void *key) {
+    assert(key == NULL);
     hti_t *hti = ht->hti;
     int rcount;
     do {
@@ -613,44 +614,36 @@ ht_iter_t *ht_iter_start (hashtable_t *ht, void *key) {
     return iter;
 }
 
-ht_iter_t *ht_iter_next (ht_iter_t *iter) {
+uint64_t ht_iter_next (ht_iter_t *iter, void **key_ptr) {
     volatile entry_t *ent;
     uint64_t key;
     uint64_t val;
     uint64_t table_size = (1 << iter->hti->scale);
     do {
-        if (++iter->idx == table_size) {
-            ht_iter_free(iter);
-            return NULL;
+        iter->idx++;
+        if (iter->idx == table_size) {
+            return DOES_NOT_EXIST;
         }
-        ent = &iter->hti->table[++iter->idx];
+        ent = &iter->hti->table[iter->idx];
         key = ent->key;
         val = ent->val;
 
     } while (key == DOES_NOT_EXIST || val == DOES_NOT_EXIST || val == TOMBSTONE);
 
-    iter->key = key;
+    if (key_ptr) {
+        *key_ptr = (void *)key;
+    }
     if (val == COPIED_VALUE) {
         uint32_t hash = (iter->hti->ht->key_type == NULL) 
                       ? murmur32_8b(key)
                       : iter->hti->ht->key_type->hash((void *)key);
-        iter->val = hti_get(iter->hti->next, (void *)ent->key, hash);
-    } else {
-        iter->val = val;
-    }
+        val = hti_get(iter->hti->next, (void *)ent->key, hash);
+    } 
 
-    return iter;
-}
-
-uint64_t ht_iter_val (ht_iter_t *iter) {
-    return iter->val;
-}
-
-uint64_t ht_iter_key (ht_iter_t *iter) {
-    return iter->key;
+    return val;
 }
 
 void ht_iter_free (ht_iter_t *iter) {
     SYNC_ADD(&iter->hti->references, -1);
+    nbd_free(iter);
 }
-

@@ -13,7 +13,7 @@
 
 #define NUM_ITERATIONS 10000000
 
-#define TEST_STRING_KEYS
+//#define TEST_STRING_KEYS
 
 static volatile int wait_;
 static long num_threads_;

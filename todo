@@ -1,17 +1,26 @@
-- make rcu try yielding when its buffer gets full, instead of throwing an assert
 + fix makefile to compute dependency info as a side-effect of compilation (-MF)
-- investigate 16 byte CAS; ht can store GUIDs inline instead of pointers to actual keys 
-- testing, testing, testing
 + support integer keys for ht
-- validate arguments to interface functions
 + optimize tracing code, still too much overhead
 + use NULL instead of a sentinal node in skiplist and list
 + make the interfaces for all data structures consistent 
 + make list and skiplist use string keys
 + optimize integer keys
 + ht_print()
-- iterators
-- characterize performance of data structures
-- experiment with the performance impact of not passing the hash between functions
-- experiment with embedding keys in the list/skiplist nodes
++ iterators
+- make rcu yield when its buffer gets full instead of throwing an assert
+- alternate memory reclamation schemes, hazard pointers and/or reference count
+- investigate 16 byte CAS; ht can store GUIDs inline instead of pointers to actual keys 
+- document usage
+- document algorithms
+- port tests from lib-high-scale
+- 32 bit version of hashtable
+- verify list and skiplist work on 32 bit platforms
+- transaction tests
+- validate the arguments to interface functions
+- shortcut from write-set to entries/nodes
+- use a shared scan for write-set validation, similar to ht copy logic
+- characterize the performance of hashtable, list and skiplist
+- experiment with the performance impact of not passing the hash between functions in ht
+- experiment with embedding the keys in the list/skiplist nodes
 - allow values of 0 to be inserted into maps (change DOES_NOT_EXIST to something else)
+- see if it's possible to rename nbd_malloc to malloc

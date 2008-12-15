@@ -64,5 +64,42 @@ static inline unsigned int murmur32 (const char *key, int len)
 
 static inline unsigned int murmur32_8b (uint64_t key)
 {
-    return murmur32((char *)&key, 8);
+    // 'm' and 'r' are mixing constants generated offline.
+    // They're not really 'magic', they just happen to work well.
+
+    const unsigned int m = 0x5bd1e995;
+    const int r = 24;
+
+    // Initialize the hash to a 'random' value
+    unsigned int h = 8;
+
+    const unsigned char *data = (const unsigned char *)key;
+
+    uint32_t k1 = *(uint32_t *)&data;
+    data += 4;
+    uint32_t k2 = *(uint32_t *)&data;
+
+    k1 *= m; 
+    k1 ^= k1 >> r; 
+    k1 *= m; 
+
+    k2 *= m; 
+    k2 ^= k2 >> r; 
+    k2 *= m; 
+
+    // Mix 4 bytes at a time into the hash
+
+    h *= m; 
+    h ^= k1;
+    h *= m; 
+    h ^= k2;
+
+    // Do a few final mixes of the hash to ensure the last few
+    // bytes are well-incorporated.
+
+    h ^= h >> 13;
+    h *= m;
+    h ^= h >> 15;
+
+    return h;
 }

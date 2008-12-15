@@ -475,29 +475,29 @@ void sl_print (skiplist_t *sl) {
     }
 }
 
-sl_iter_t *sl_iter_start (skiplist_t *sl, void *key) {
-    node_t *item;
-    find_preds(NULL, &item, 0, sl, key, FALSE);
-    return item;
+sl_iter_t *sl_iter_begin (skiplist_t *sl, void *key) {
+    node_t *iter = node_alloc(0, 0, 0);
+    find_preds(NULL, &iter->next[0], 0, sl, key, FALSE);
+    return iter;
 }
 
-sl_iter_t *sl_iter_next (sl_iter_t *iter) {
+uint64_t sl_iter_next (sl_iter_t *iter, void **key_ptr) {
     assert(iter);
-    if (EXPECT_FALSE(!iter))
-        return NULL;
-
-    node_t *next = iter->next[0];
-    while (next != NULL && IS_TAGGED(next->next[0], TAG1)) {
-        next = (node_t *)STRIP_TAG(next->next[0], TAG1);
+    node_t *item = iter->next[0];
+    while (item != NULL && IS_TAGGED(item->next[0], TAG1)) {
+        item = (node_t *)STRIP_TAG(item->next[0], TAG1);
     }
-
-    return next;
+    if (item == NULL) {
+        iter->next[0] = NULL;
+        return DOES_NOT_EXIST;
+    }
+    iter->next[0] = item->next[0];
+    if (key_ptr != NULL) {
+        *key_ptr = item->key;
+    }
+    return item->val;
 }
 
-uint64_t sl_iter_val (sl_iter_t *iter) {
-    return iter->val;
-}
-
-void *sl_iter_key (sl_iter_t *iter) {
-    return iter->key;
+void sl_iter_free (sl_iter_t *iter) {
+    nbd_free(iter);
 }

@@ -15,14 +15,14 @@ void     ll_print   (list_t *ll);
 void     ll_free    (list_t *ll);
 void *   ll_min_key (list_t *sl);
 
-ll_iter_t *ll_iter_start (list_t *ll, void *key);
-ll_iter_t *ll_iter_next  (ll_iter_t *iter);
-uint64_t   ll_iter_val   (ll_iter_t *iter);
-void *     ll_iter_key   (ll_iter_t *iter);
+ll_iter_t * ll_iter_begin (list_t *ll, void *key);
+uint64_t    ll_iter_next  (ll_iter_t *iter, void **key_ptr);
+void        ll_iter_free  (ll_iter_t *iter);
 
 static const map_impl_t ll_map_impl = { 
     (map_alloc_t)ll_alloc, (map_cas_t)ll_cas, (map_get_t)ll_lookup, (map_remove_t)ll_remove, 
-    (map_count_t)ll_count, (map_print_t)ll_print, (map_free_t)ll_free
+    (map_count_t)ll_count, (map_print_t)ll_print, (map_free_t)ll_free, (map_iter_begin_t)ll_iter_begin,
+    (map_iter_next_t)ll_iter_next, (map_iter_free_t)ll_iter_free
 };
 
 #endif//LIST_H
