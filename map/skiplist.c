@@ -123,14 +123,13 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
     // Traverse the levels of <sl> from the top level to the bottom
     for (int level = start_level; level >= 0; --level) {
         TRACE("s3", "find_preds: level %llu", level, 0);
-        uint64_t next = pred->next[level];
-        if (EXPECT_FALSE(IS_TAGGED(next, TAG1))) {
-            TRACE("s2", "find_preds: pred %p is marked for removal (next %p); retry", pred, next);
+        item = (node_t *)pred->next[level];
+        if (EXPECT_FALSE(IS_TAGGED((uint64_t)item, TAG1))) {
+            TRACE("s2", "find_preds: pred %p is marked for removal (item %p); retry", pred, item);
             return find_preds(preds, succs, n, sl, key, help_remove); // retry
         }
-        while (next != DOES_NOT_EXIST) {
-            item = (node_t *)(size_t)next;
-            next = item->next[level];
+        while (item != NULL) {
+            uint64_t next = item->next[level];
 
             // A tag means an item is logically removed but not physically unlinked yet.
             while (EXPECT_FALSE(IS_TAGGED(next, TAG1))) {
