@@ -33,9 +33,9 @@ typedef struct worker_data {
 
 static const map_impl_t *map_type_;
 
-static uint64_t iterator_size (map_t *map) {
+static size_t iterator_size (map_t *map) {
     map_iter_t *iter = map_iter_begin(map, 0);
-    uint64_t count = 0;
+    size_t count = 0;
     while (map_iter_next(iter, NULL) != DOES_NOT_EXIST) {
         count++;
     }
@@ -129,7 +129,7 @@ void *add_remove_worker (void *arg) {
     worker_data_t *wd = (worker_data_t *)arg;
     map_t *map = wd->map;
     CuTest* tc = wd->tc;
-    uint64_t d = wd->id;
+    int d = wd->id;
     int iters = 10000;
 
     SYNC_ADD(wd->wait, -1);
@@ -142,7 +142,7 @@ void *add_remove_worker (void *arg) {
 #endif
 
     for (int j = 0; j < 10; ++j) {
-        for (uint64_t i = d+1; i < iters; i+=2) {
+        for (int i = d+1; i < iters; i+=2) {
 #ifdef TEST_STRING_KEYS
             memset(key->data, 0, key->len);
             snprintf(key->data, key->len, "%llu", i);
@@ -153,10 +153,10 @@ void *add_remove_worker (void *arg) {
             ASSERT_EQUAL(DOES_NOT_EXIST, map_add(map, key, d+1) );
             rcu_update(); // In a quiecent state.
         }
-        for (uint64_t i = d+1; i < iters; i+=2) {
+        for (int i = d+1; i < iters; i+=2) {
 #ifdef TEST_STRING_KEYS
             memset(key->data, 0, key->len);
-            snprintf(key->data, key->len, "%llu", i);
+            snprintf(key->data, key->len, "%u", i);
 #else
             key = (map_key_t)i;
 #endif
@@ -231,7 +231,7 @@ void basic_iteration_test (CuTest* tc) {
     ASSERT_EQUAL( DOES_NOT_EXIST, map_add    (map, k1,1) );
     ASSERT_EQUAL( DOES_NOT_EXIST, map_add    (map, k2,2) );
 
-    uint64_t x_v, y_v;
+    map_val_t x_v, y_v;
     map_iter_t *iter = map_iter_begin(map, 0);
     x_v = map_iter_next(iter, &x_k);
     y_v = map_iter_next(iter, &y_k);
@@ -282,7 +282,7 @@ void big_iteration_test (CuTest* tc) {
     ASSERT_EQUAL( n, iterator_size(map) );
 
     uint64_t sum = 0;
-    uint64_t val;
+    map_val_t val;
     map_iter_t *iter = map_iter_begin(map, 0);
     while ((val = map_iter_next(iter, NULL)) != DOES_NOT_EXIST) {
         sum += val;

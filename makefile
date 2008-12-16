@@ -43,6 +43,14 @@ $(EXES): output/% : output/%.d makefile
 	gcc $(CFLAGS:-combine:) $(INCS) -MM -MT $@ $($*_SRCS) > $@.d
 	gcc $(CFLAGS) $(INCS) -o $@ $($*_SRCS)
 
+asm: $(addsuffix .s, $(EXES))
+
+$(addsuffix .s, $(EXES)): output/%.s : output/%.d makefile
+	gcc $(CFLAGS:-combine:) $(INCS) -MM -MT $@ $($*_SRCS) > output/$*.d
+	gcc $(CFLAGS) $(INCS) -S -o $@.temp $($*_SRCS)
+	grep -v "^L[BFM]\|^LCF" $@.temp > $@
+	rm $@.temp
+
 ###################################################################################################
 # tags file for vi
 ###################################################################################################
@@ -62,4 +70,4 @@ $(addsuffix .d, $(EXES)) : output/%.d :
 
 -include $(addsuffix .d, $(EXES))
 
-.PHONY: clean test tags
+.PHONY: clean test tags asm

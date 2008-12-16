@@ -48,5 +48,7 @@ typedef unsigned long long uint64_t;
 typedef unsigned int       uint32_t;
 typedef unsigned char      uint8_t;
 
+typedef uint64_t markable_t;
+
 #include "lwt.h"
 #endif //COMMON_H

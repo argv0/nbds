@@ -10,7 +10,7 @@ list_t *   ll_alloc   (const datatype_t *key_type);
 map_val_t  ll_cas     (list_t *ll, map_key_t key, map_val_t expected_val, map_val_t new_val);
 map_val_t  ll_lookup  (list_t *ll, map_key_t key);
 map_val_t  ll_remove  (list_t *ll, map_key_t key);
-map_val_t  ll_count   (list_t *ll);
+size_t     ll_count   (list_t *ll);
 void       ll_print   (list_t *ll);
 void       ll_free    (list_t *ll);
 map_key_t  ll_min_key (list_t *sl);

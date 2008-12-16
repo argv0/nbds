@@ -11,7 +11,7 @@
 #include "skiplist.h"
 #include "hashtable.h"
 
-#define NUM_ITERATIONS 1000000
+#define NUM_ITERATIONS 10000000
 
 //#define TEST_STRING_KEYS
 
@@ -31,14 +31,14 @@ void *worker (void *arg) {
 
     for (int i = 0; i < NUM_ITERATIONS/num_threads_; ++i) {
         unsigned r = nbd_rand();
-        uint64_t key = r & 0xF;
+        int key = r & 0xF;
 #ifdef TEST_STRING_KEYS
         key_str->len = sprintf(key_str->data, "%llX", key) + 1;
         assert(key_str->len <= 10);
         if (r & (1 << 8)) {
-            map_set(map_, key_str, 1);
+            map_set(map_, (map_key_t)key_str, 1);
         } else {
-            map_remove(map_, key_str);
+            map_remove(map_, (map_key_t)key_str);
         }
 #else
         if (r & (1 << 8)) {
