@@ -13,7 +13,7 @@ void test1 (CuTest* tc) {
     map_t *map = map_alloc(&ht_map_impl, NULL);
     txn_t *t1 = txn_begin(map);
     txn_t *t2 = txn_begin(map);
-    void *k1 = (void *)1;
+    map_key_t k1 = (map_key_t)1;
     txn_map_set(t1, k1, 2);
     txn_map_set(t1, k1, 3);
     ASSERT_EQUAL( DOES_NOT_EXIST, txn_map_get(t2, k1) );

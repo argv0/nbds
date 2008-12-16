@@ -18,9 +18,9 @@ volatile int halt_ = 0;
 
 typedef struct lwt_record {
     uint64_t timestamp;
-    const char *format;
-    size_t value1;
-    size_t value2;
+    uint64_t format;
+    uint64_t value1;
+    uint64_t value2;
 } lwt_record_t;
 
 typedef struct lwt_buffer {
@@ -54,12 +54,12 @@ void lwt_set_trace_level (const char *flags)
 static inline void dump_record (FILE *file, int thread_id, lwt_record_t *r, uint64_t offset)
 {
     // print the record if its trace category is enabled at a high enough level
-    int flag  =  (size_t)r->format >> 56;
-    int level = ((size_t)r->format >> 48) & 0xFF;
+    int flag  =  r->format >> 56;
+    int level = (r->format >> 48) & 0xFF;
     if (flag_state_[(unsigned)flag] >= level) {
         char s[3] = {flag, level, '\0'};
         fprintf(file, "%09llu %d %s ", ((uint64_t)r->timestamp - offset) >> 5, thread_id, s);
-        const char *format = (const char *)((size_t)r->format & MASK(48)); // strip out the embedded flags
+        const char *format = (const char *)(size_t)(r->format & MASK(48)); // strip out the embedded flags
         fprintf(file, format, r->value1, r->value2);
         fprintf(file, "\n");
     }
@@ -118,7 +118,7 @@ void lwt_dump (const char *file_name)
     }
 }
 
-void lwt_trace_i (const char *format, size_t value1, size_t value2) {
+void lwt_trace_i (uint64_t format, size_t value1, size_t value2) {
     while (halt_) {}
     LOCALIZE_THREAD_LOCAL(tid_, int);
     lwt_buffer_t *tb = lwt_buf_[tid_];

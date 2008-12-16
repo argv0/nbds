@@ -37,9 +37,9 @@ static inline void lwt_trace (const char *flag, const char *format, size_t value
     extern char flag_state_[256];
     if (EXPECT_FALSE(flag_state_[(unsigned)flag[0]] >= flag[1])) {
         // embed <flags> in <format> so we don't have to make the lwt_record_t any bigger than it already is
-        format = (const char *)((size_t)format | ((uint64_t)flag[0] << 56) | ((uint64_t)flag[1] << 48));
-        extern void lwt_trace_i (const char *format, size_t value1, size_t value2);
-        lwt_trace_i(format, value1, value2);
+        uint64_t f = ((uint64_t)(size_t)format | ((uint64_t)flag[0] << 56) | ((uint64_t)flag[1] << 48));
+        extern void lwt_trace_i (uint64_t format, size_t value1, size_t value2);
+        lwt_trace_i(f, value1, value2);
     }
 }
 

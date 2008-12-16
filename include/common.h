@@ -34,9 +34,9 @@
 
 #define TAG1         (1ULL << 63)
 #define TAG2         (1ULL << 62)
-#define TAG_VALUE(v, tag) ((uint64_t)(v) |  tag)
-#define IS_TAGGED(v, tag) ((uint64_t)(v) &  tag)
-#define STRIP_TAG(v, tag) ((uint64_t)(v) & ~tag)
+#define TAG_VALUE(v, tag) ((v) |  tag)
+#define IS_TAGGED(v, tag) ((v) &  tag)
+#define STRIP_TAG(v, tag) ((v) & ~tag)
 
 #define DOES_NOT_EXIST 0
 #define ERROR_INVALID_OPTION (-1)

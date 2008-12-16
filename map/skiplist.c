@@ -28,13 +28,15 @@
 // Setting MAX_LEVEL to 0 essentially makes this data structure the Harris-Michael lock-free list (in list.c).
 #define MAX_LEVEL 31
 
-typedef struct sl_iter node_t;
-
-struct sl_iter {
+typedef struct node {
     map_key_t key;
     map_val_t val;
     int top_level;
-    node_t *next[];
+    uint64_t next[];
+} node_t;
+
+struct sl_iter {
+    node_t *next;
 };
 
 struct sl {
@@ -68,15 +70,18 @@ static node_t *node_alloc (int level, map_key_t key, map_val_t val) {
 skiplist_t *sl_alloc (const datatype_t *key_type) {
     skiplist_t *sl = (skiplist_t *)nbd_malloc(sizeof(skiplist_t));
     sl->key_type = key_type;
-    sl->head = node_alloc(MAX_LEVEL, NULL, 0);
+    sl->head = node_alloc(MAX_LEVEL, 0, 0);
     memset(sl->head->next, 0, (MAX_LEVEL+1) * sizeof(skiplist_t *));
     return sl;
 }
 
 void sl_free (skiplist_t *sl) {
-    node_t *item = sl->head->next[0];
+    node_t *item = (node_t *)(size_t)sl->head->next[0];
     while (item) {
-        node_t *next = (node_t *)STRIP_TAG(item->next[0], TAG1);
+        node_t *next = (node_t *)(size_t)STRIP_TAG(item->next[0], TAG1);
+        if (sl->key_type != NULL) {
+            nbd_free((void *)(size_t)item->key);
+        }
         nbd_free(item);
         item = next;
     }
@@ -84,12 +89,12 @@ void sl_free (skiplist_t *sl) {
 
 uint64_t sl_count (skiplist_t *sl) {
     uint64_t count = 0;
-    node_t *item = sl->head->next[0];
+    node_t *item = (node_t *)(size_t)sl->head->next[0];
     while (item) {
         if (!IS_TAGGED(item->next[0], TAG1)) {
             count++;
         }
-        item = (node_t *)STRIP_TAG(item->next[0], TAG1);
+        item = (node_t *)(size_t)STRIP_TAG(item->next[0], TAG1);
     }
     return count;
 }
@@ -103,7 +108,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
 #if MAX_LEVEL > 2
     // Optimization for small lists. No need to traverse empty higher levels.
     start_level = 2;
-    while (pred->next[start_level+1] != NULL) {
+    while (pred->next[start_level+1] != DOES_NOT_EXIST) {
         start_level += start_level - 1;
         if (EXPECT_FALSE(start_level >= MAX_LEVEL)) {
             start_level = MAX_LEVEL;
@@ -118,53 +123,50 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
     // Traverse the levels of <sl> from the top level to the bottom
     for (int level = start_level; level >= 0; --level) {
         TRACE("s3", "find_preds: level %llu", level, 0);
-        item = pred->next[level];
-        if (EXPECT_FALSE(IS_TAGGED(item, TAG1))) {
-            TRACE("s2", "find_preds: pred %p is marked for removal (item %p); retry", pred, item);
+        uint64_t next = pred->next[level];
+        if (EXPECT_FALSE(IS_TAGGED(next, TAG1))) {
+            TRACE("s2", "find_preds: pred %p is marked for removal (next %p); retry", pred, next);
             return find_preds(preds, succs, n, sl, key, help_remove); // retry
         }
-        while (item != NULL) {
-            node_t *next = item->next[level];
+        while (next != DOES_NOT_EXIST) {
+            item = (node_t *)(size_t)next;
+            next = item->next[level];
 
             // A tag means an item is logically removed but not physically unlinked yet.
             while (EXPECT_FALSE(IS_TAGGED(next, TAG1))) {
 
                 // Skip over logically removed items.
                 if (!help_remove) {
-                    item = (node_t *)STRIP_TAG(item->next, TAG1);
+                    item = (node_t *)(size_t)STRIP_TAG(next, TAG1);
                     if (EXPECT_FALSE(item == NULL))
                         break;
-                    TRACE("s3", "find_preds: skipping marked item %p (next is %p)", item, next);
                     next = item->next[level];
+                    TRACE("s3", "find_preds: skipping marked item %p (next is 0x%llx)", item, next);
                     continue;
                 }
 
                 // Unlink logically removed items.
-                node_t *other;
-                TRACE("s3", "find_preds: unlinking marked item %p; next is %p", item, next);
-                if ((other = SYNC_CAS(&pred->next[level], item, STRIP_TAG(next, TAG1))) == item) {
-                    item = (node_t *)STRIP_TAG(next, TAG1);
-                    if (EXPECT_FALSE(item == NULL))
-                        break;
-                    next = item->next[level];
-                    TRACE("s3", "find_preds: now the current item is %p next is %p", item, next);
+                TRACE("s3", "find_preds: unlinking marked item %p; next is 0x%llx", item, next);
+                uint64_t other = SYNC_CAS(&pred->next[level], (uint64_t)(size_t)item, STRIP_TAG(next, TAG1));
+                if (other == (uint64_t)(size_t)item) {
+                    item = (node_t *)(size_t)STRIP_TAG(next, TAG1);
+                    next = (item != NULL) ? item->next[level] : DOES_NOT_EXIST;
+                    TRACE("s3", "find_preds: now the current item is %p next is 0x%llx", item, next);
 
                     // The thread that completes the unlink should free the memory.
                     if (level == 0) {
                         if (sl->key_type != NULL) {
-                            nbd_defer_free((void*)other->key);
+                            nbd_defer_free((void *)(size_t)((node_t *)(size_t)other)->key);
                         }
-                        nbd_defer_free(other);
+                        nbd_defer_free(((node_t *)(size_t)other));
                     }
                 } else {
                     TRACE("s3", "find_preds: lost race to unlink item %p from pred %p", item, pred);
                     TRACE("s3", "find_preds: pred's link changed to %p", other, 0);
                     if (IS_TAGGED(other, TAG1))
                         return find_preds(preds, succs, n, sl, key, help_remove); // retry
-                    item = other;
-                    if (EXPECT_FALSE(item == NULL))
-                        break;
-                    next = item->next[level];
+                    item = (node_t *)(size_t)other;
+                    next = (item != NULL) ? item->next[level] : DOES_NOT_EXIST;
                 }
             }
 
@@ -177,7 +179,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
             if (EXPECT_TRUE(sl->key_type == NULL)) {
                 d = (uint64_t)item->key - (uint64_t)key;
             } else {
-                d = sl->key_type->cmp(item->key, key);
+                d = sl->key_type->cmp((void *)(size_t)item->key, (void *)(size_t)key);
             }
 
             if (d >= 0) {
@@ -186,7 +188,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
             }
 
             pred = item;
-            item = next;
+            item = (node_t *)(size_t)next;
         }
 
         // The cast to unsigned is for the case when n is -1.
@@ -202,6 +204,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
 
      // fill in empty levels
      if (n == -1 && item != NULL) {
+         assert(item->top_level <= MAX_LEVEL);
          for (int level = start_level + 1; level <= item->top_level; ++level) {
              preds[level] = sl->head;
          }
@@ -234,12 +237,12 @@ map_val_t sl_lookup (skiplist_t *sl, map_key_t key) {
 }
 
 map_key_t sl_min_key (skiplist_t *sl) {
-    node_t *item = sl->head->next[0];
+    node_t *item = (node_t *)(size_t)sl->head->next[0];
     while (item != NULL) {
-        node_t *next = item->next[0];
+        uint64_t next = item->next[0];
         if (!IS_TAGGED(next, TAG1))
             return item->key;
-        item = (node_t *)STRIP_TAG(next, TAG1);
+        item = (node_t *)(size_t)STRIP_TAG(next, TAG1);
     }
     return DOES_NOT_EXIST;
 }
@@ -267,21 +270,23 @@ map_val_t sl_cas (skiplist_t *sl, map_key_t key, map_val_t expectation, map_val_
 
             // First insert <new_item> into the bottom level.
             TRACE("s3", "sl_cas: attempting to insert item between %p and %p", preds[0], nexts[0]);
-            map_key_t new_key  = (sl->key_type == NULL) ? key : sl->key_type->clone(key);
+            map_key_t new_key = (sl->key_type == NULL) 
+                              ? key 
+                              : (map_key_t)(size_t)sl->key_type->clone((void *)(size_t)key);
             new_item = node_alloc(n, new_key, new_val);
             node_t *pred = preds[0];
-            node_t *next = new_item->next[0] = nexts[0];
+            uint64_t next = new_item->next[0] = (uint64_t)(size_t)nexts[0];
             for (int level = 1; level <= new_item->top_level; ++level) {
-                new_item->next[level] = nexts[level];
+                new_item->next[level] = (uint64_t)(size_t)nexts[level];
             }
-            node_t *other = SYNC_CAS(&pred->next[0], next, new_item);
+            uint64_t other = SYNC_CAS(&pred->next[0], next, (uint64_t)(size_t)new_item);
             if (other == next) {
                 TRACE("s3", "sl_cas: successfully inserted item %p at level 0", new_item, 0);
                 break; // success
             }
             TRACE("s3", "sl_cas: failed to change pred's link: expected %p found %p", next, other);
             if (sl->key_type != NULL) {
-                nbd_free(new_key);
+                nbd_free((void *)(size_t)new_key);
             }
             nbd_free(new_item);
             continue;
@@ -320,10 +325,10 @@ map_val_t sl_cas (skiplist_t *sl, map_key_t key, map_val_t expectation, map_val_
     // Link <new_item> into <sl> from the bottom up.
     for (int level = 1; level <= new_item->top_level; ++level) {
         node_t *pred = preds[level];
-        node_t *next = nexts[level];
+        uint64_t next = (uint64_t)(size_t)nexts[level];
         do {
             TRACE("s3", "sl_cas: attempting to insert item between %p and %p", pred, next);
-            node_t *other = SYNC_CAS(&pred->next[level], next, new_item);
+            uint64_t other = SYNC_CAS(&pred->next[level], next, (uint64_t)(size_t)new_item);
             if (other == next) {
                 TRACE("s3", "sl_cas: successfully inserted item %p at level %llu", new_item, level);
                 break; // success
@@ -331,12 +336,12 @@ map_val_t sl_cas (skiplist_t *sl, map_key_t key, map_val_t expectation, map_val_
             TRACE("s3", "sl_cas: failed to change pred's link: expected %p found %p", next, other);
             find_preds(preds, nexts, new_item->top_level, sl, key, TRUE);
             pred = preds[level];
-            next = nexts[level];
+            next = (uint64_t)(size_t)nexts[level];
 
             // Update <new_item>'s next pointer
             do {
                 // There in no need to continue linking in the item if another thread removed it.
-                node_t *old_next = ((volatile node_t *)new_item)->next[level];
+                uint64_t old_next = ((volatile node_t *)new_item)->next[level];
                 if (IS_TAGGED(old_next, TAG1))
                     return DOES_NOT_EXIST; // success
 
@@ -361,8 +366,8 @@ map_val_t sl_remove (skiplist_t *sl, map_key_t key) {
     // Mark and unlink <item> at each level of <sl> from the top down. If multiple threads try to concurrently remove
     // the same item only one of them should succeed. Marking the bottom level establishes which of them succeeds.
     for (int level = item->top_level; level > 0; --level) {
-        node_t *next;
-        node_t *old_next = item->next[level];
+        uint64_t next;
+        uint64_t old_next = item->next[level];
         do {
             next = old_next;
             old_next = SYNC_CAS(&item->next[level], next, TAG_VALUE(next, TAG1));
@@ -374,20 +379,21 @@ map_val_t sl_remove (skiplist_t *sl, map_key_t key) {
 
         node_t *pred = preds[level];
         TRACE("s2", "sl_remove: linking the item's pred %p to the item's successor %p", pred, STRIP_TAG(next, TAG1));
-        node_t *other = NULL;
-        if ((other = SYNC_CAS(&pred->next[level], item, STRIP_TAG(next, TAG1))) != item) {
+        uint64_t other = SYNC_CAS(&pred->next[level], (uint64_t)(size_t)item, STRIP_TAG(next, TAG1));
+        if (other != (uint64_t)(size_t)item) {
             TRACE("s1", "sl_remove: unlink failed; pred's link changed from %p to %p", item, other);
             // If our former predecessor now points past us we know another thread unlinked us. Otherwise, we need
             // to search for a new set of preds.
-            if (other == NULL)
+            if (other == DOES_NOT_EXIST)
                 continue; // <pred> points past <item> to the end of the list; go on to the next level.
 
             int d = -1;
             if (!IS_TAGGED(other, TAG1)) {
+                map_key_t other_key = ((node_t *)(size_t)other)->key;
                 if (EXPECT_TRUE(sl->key_type == NULL)) {
-                    d = (uint64_t)item->key - (uint64_t)other->key;
+                    d = (uint64_t)item->key - (uint64_t)other_key;
                 } else {
-                    d = sl->key_type->cmp(item->key, other->key);
+                    d = sl->key_type->cmp((void *)(size_t)item->key, (void *)(size_t)other_key);
                 }
             }
             if (d > 0) {
@@ -399,8 +405,8 @@ map_val_t sl_remove (skiplist_t *sl, map_key_t key) {
         }
     }
 
-    node_t *next;
-    node_t *old_next = item->next[0];
+    uint64_t next;
+    uint64_t old_next = item->next[0];
     do {
         next = old_next;
         old_next = SYNC_CAS(&item->next[0], next, TAG_VALUE(next, TAG1));
@@ -422,7 +428,7 @@ map_val_t sl_remove (skiplist_t *sl, map_key_t key) {
         TRACE("s2", "sl_remove: unlinked item %p from the skiplist at level 0", item, 0);
         // The thread that completes the unlink should free the memory.
         if (sl->key_type != NULL) {
-            nbd_defer_free(item->key);
+            nbd_defer_free((void *)(size_t)item->key);
         }
         nbd_defer_free(item);
     }
@@ -432,14 +438,14 @@ map_val_t sl_remove (skiplist_t *sl, map_key_t key) {
 void sl_print (skiplist_t *sl) {
     for (int level = MAX_LEVEL; level >= 0; --level) {
         node_t *item = sl->head;
-        if (item->next[level] == NULL)
+        if (item->next[level] == DOES_NOT_EXIST)
             continue;
         printf("(%d) ", level);
         int i = 0;
         while (item) {
-            node_t *next = item->next[level];
+            uint64_t next = item->next[level];
             printf("%s%p ", IS_TAGGED(next, TAG1) ? "*" : "", item);
-            item = (node_t *)STRIP_TAG(next, TAG1);
+            item = (node_t *)(size_t)STRIP_TAG(next, TAG1);
             if (i++ > 30) {
                 printf("...");
                 break;
@@ -452,22 +458,22 @@ void sl_print (skiplist_t *sl) {
     int i = 0;
     while (item) {
         int is_marked = IS_TAGGED(item->next[0], TAG1);
-        printf("%s%p:%p ", is_marked ? "*" : "", item, item->key);
+        printf("%s%p:0x%llx ", is_marked ? "*" : "", item, (uint64_t)(size_t)item->key);
         if (item != sl->head) {
             printf("[%d]", item->top_level);
         } else {
             printf("[HEAD]");
         }
         for (int level = 1; level <= item->top_level; ++level) {
-            node_t *next = (node_t *)STRIP_TAG(item->next[level], TAG1);
+            node_t *next = (node_t *)(size_t)STRIP_TAG(item->next[level], TAG1);
             is_marked = IS_TAGGED(item->next[0], TAG1);
             printf(" %p%s", next, is_marked ? "*" : "");
-            if (item == sl->head && item->next[level] == NULL)
+            if (item == sl->head && item->next[level] == DOES_NOT_EXIST)
                 break;
         }
         printf("\n");
         fflush(stdout);
-        item = (node_t *)STRIP_TAG(item->next[0], TAG1);
+        item = (node_t *)(size_t)STRIP_TAG(item->next[0], TAG1);
         if (i++ > 30) {
             printf("...\n");
             break;
@@ -476,22 +482,22 @@ void sl_print (skiplist_t *sl) {
 }
 
 sl_iter_t *sl_iter_begin (skiplist_t *sl, map_key_t key) {
-    node_t *iter = node_alloc(0, 0, 0);
-    find_preds(NULL, &iter->next[0], 0, sl, key, FALSE);
+    sl_iter_t *iter = (sl_iter_t *)nbd_malloc(sizeof(sl_iter_t));
+    find_preds(NULL, &iter->next, 0, sl, key, FALSE);
     return iter;
 }
 
 map_val_t sl_iter_next (sl_iter_t *iter, map_key_t *key_ptr) {
     assert(iter);
-    node_t *item = iter->next[0];
+    node_t *item = iter->next;
     while (item != NULL && IS_TAGGED(item->next[0], TAG1)) {
-        item = (node_t *)STRIP_TAG(item->next[0], TAG1);
+        item = (node_t *)(size_t)STRIP_TAG(item->next[0], TAG1);
     }
     if (item == NULL) {
-        iter->next[0] = NULL;
+        iter->next = NULL;
         return DOES_NOT_EXIST;
     }
-    iter->next[0] = item->next[0];
+    iter->next = (node_t *)(size_t)STRIP_TAG(item->next[0], TAG1);
     if (key_ptr != NULL) {
         *key_ptr = item->key;
     }

@@ -17,7 +17,7 @@ txn_t *     txn_begin  (map_t *map);
 void        txn_abort  (txn_t *txn);
 txn_state_e txn_commit (txn_t *txn);
 
-uint64_t    txn_map_get (txn_t *txn, void *key);
-void        txn_map_set (txn_t *txn, void *key, uint64_t value);
+uint64_t    txn_map_get (txn_t *txn, map_key_t key);
+void        txn_map_set (txn_t *txn, map_key_t key, map_val_t value);
 
 #endif//TXN_H

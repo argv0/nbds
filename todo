@@ -11,11 +11,11 @@
 memory manangement
 ------------------
 - make rcu yield when its buffer gets full instead of throwing an assert
-- alternate memory reclamation schemes, hazard pointers and/or reference count
-- verify key management in list, skiplist, and hashtable
+- alternate memory reclamation schemes: hazard pointers and/or reference counting
+- verify the key management in list, skiplist, and hashtable
 
-quaility
---------
+quality
+-------
 - transaction tests
 - port perf tests from lib-high-scale
 - characterize the performance of hashtable, list and skiplist
@@ -33,7 +33,7 @@ optimization
 
 features
 --------
-- 32 bit version of hashtable
-- verify list and skiplist work on 32 bit platforms
+- a version of hashtable for 32bit keys and values
+- verify correctness on 32 bit platforms
 - allow values of 0 to be inserted into maps (change DOES_NOT_EXIST to something else)
 - seperate nbd_malloc/nbd_free into general purpose malloc/free replacement

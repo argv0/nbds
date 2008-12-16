@@ -7,7 +7,7 @@ typedef struct map map_t;
 typedef struct map_iter map_iter_t;
 typedef struct map_impl map_impl_t;
 
-typedef void *   map_key_t;
+typedef uint64_t map_key_t;
 typedef uint64_t map_val_t;
 
 map_t *   map_alloc   (const map_impl_t *map_impl, const datatype_t *key_type);

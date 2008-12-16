@@ -34,7 +34,7 @@ typedef struct worker_data {
 static const map_impl_t *map_type_;
 
 static uint64_t iterator_size (map_t *map) {
-    map_iter_t *iter = map_iter_begin(map, NULL);
+    map_iter_t *iter = map_iter_begin(map, 0);
     uint64_t count = 0;
     while (map_iter_next(iter, NULL) != DOES_NOT_EXIST) {
         count++;
@@ -54,10 +54,10 @@ void basic_test (CuTest* tc) {
     nstring_t *k4 = ns_alloc(3); strcpy(k1->data, "k4");
 #else
     map_t *map = map_alloc(map_type_, NULL);
-    void *k1 = (void *)1;
-    void *k2 = (void *)2;
-    void *k3 = (void *)3;
-    void *k4 = (void *)4;
+    map_key_t k1 = (map_key_t)1;
+    map_key_t k2 = (map_key_t)2;
+    map_key_t k3 = (map_key_t)3;
+    map_key_t k4 = (map_key_t)4;
 #endif
 
     ASSERT_EQUAL( 0,              map_count  (map)        );
@@ -138,7 +138,7 @@ void *add_remove_worker (void *arg) {
 #ifdef TEST_STRING_KEYS
     nstring_t *key = ns_alloc(9);
 #else
-    void *key;
+    map_key_t key;
 #endif
 
     for (int j = 0; j < 10; ++j) {
@@ -147,7 +147,7 @@ void *add_remove_worker (void *arg) {
             memset(key->data, 0, key->len);
             snprintf(key->data, key->len, "%llu", i);
 #else
-            key = (void *)i;
+            key = (map_key_t)i;
 #endif
             TRACE("t0", "test map_add() iteration (%llu, %llu)", j, i);
             ASSERT_EQUAL(DOES_NOT_EXIST, map_add(map, key, d+1) );
@@ -158,7 +158,7 @@ void *add_remove_worker (void *arg) {
             memset(key->data, 0, key->len);
             snprintf(key->data, key->len, "%llu", i);
 #else
-            key = (void *)i;
+            key = (map_key_t)i;
 #endif
             TRACE("t0", "test map_remove() iteration (%llu, %llu)", j, i);
             ASSERT_EQUAL(d+1, map_remove(map, key) );
@@ -173,7 +173,8 @@ void concurrent_add_remove_test (CuTest* tc) {
 
     pthread_t thread[2];
     worker_data_t wd[2];
-    volatile int wait = 2;
+    static const int num_threads = 2;
+    volatile int wait = num_threads;
 #ifdef TEST_STRING_KEYS
     map_t *map = map_alloc(map_type_, &DATATYPE_NSTRING);
 #else
@@ -185,7 +186,7 @@ void concurrent_add_remove_test (CuTest* tc) {
 
     // In 2 threads, add & remove even & odd elements concurrently
     int i;
-    for (i = 0; i < 2; ++i) {
+    for (i = 0; i < num_threads; ++i) {
         wd[i].id = i;
         wd[i].tc = tc;
         wd[i].map = map;
@@ -194,14 +195,14 @@ void concurrent_add_remove_test (CuTest* tc) {
         if (rc != 0) { perror("nbd_thread_create"); return; }
     }
 
-    for (i = 0; i < 2; ++i) {
+    for (i = 0; i < num_threads; ++i) {
         pthread_join(thread[i], NULL);
     }
 
     gettimeofday(&tv2, NULL);
     int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
     map_print(map);
-    printf("Th:%d Time:%dms\n", 2, ms);
+    printf("Th:%d Time:%dms\n", num_threads, ms);
     fflush(stdout);
 
     // In the end, all members should be removed
@@ -221,17 +222,17 @@ void basic_iteration_test (CuTest* tc) {
     nstring_t *y_k;
 #else
     map_t *map = map_alloc(map_type_, NULL);
-    void *k1 = (void *)1;
-    void *k2 = (void *)2;
-    void *x_k;
-    void *y_k;
+    map_key_t k1 = (map_key_t)1;
+    map_key_t k2 = (map_key_t)2;
+    map_key_t x_k;
+    map_key_t y_k;
 #endif
 
     ASSERT_EQUAL( DOES_NOT_EXIST, map_add    (map, k1,1) );
     ASSERT_EQUAL( DOES_NOT_EXIST, map_add    (map, k2,2) );
 
     uint64_t x_v, y_v;
-    map_iter_t *iter = map_iter_begin(map, NULL);
+    map_iter_t *iter = map_iter_begin(map, 0);
     x_v = map_iter_next(iter, &x_k);
     y_v = map_iter_next(iter, &y_k);
     ASSERT_EQUAL( DOES_NOT_EXIST, map_iter_next(iter, NULL) );
@@ -259,9 +260,9 @@ void big_iteration_test (CuTest* tc) {
     nstring_t *k4 = ns_alloc(3); strcpy(k1->data, "k4");
 #else
     map_t *map = map_alloc(map_type_, NULL);
-    void *k3 = (void *)3;
-    void *k4 = (void *)4;
-    void *key;
+    map_key_t k3 = (map_key_t)3;
+    map_key_t k4 = (map_key_t)4;
+    map_key_t key;
 #endif
 
     for (size_t i = 1; i <= n; ++i) {
@@ -269,7 +270,7 @@ void big_iteration_test (CuTest* tc) {
         memset(key->data, 0, key->len);
         snprintf(key->data, key->len, "k%llu", i);
 #else
-        key = (void *)i;
+        key = (map_key_t)i;
 #endif
         ASSERT_EQUAL( DOES_NOT_EXIST, map_get(map, key)    );
         ASSERT_EQUAL( DOES_NOT_EXIST, map_set(map, key, i) );
@@ -282,7 +283,7 @@ void big_iteration_test (CuTest* tc) {
 
     uint64_t sum = 0;
     uint64_t val;
-    map_iter_t *iter = map_iter_begin(map, NULL);
+    map_iter_t *iter = map_iter_begin(map, 0);
     while ((val = map_iter_next(iter, NULL)) != DOES_NOT_EXIST) {
         sum += val;
     }
@@ -291,7 +292,7 @@ void big_iteration_test (CuTest* tc) {
     ASSERT_EQUAL(3, map_remove(map, k3));
     ASSERT_EQUAL(4, map_remove(map, k4));
     sum = 0;
-    iter = map_iter_begin(map, NULL);
+    iter = map_iter_begin(map, 0);
     while ((val = map_iter_next(iter, NULL)) != DOES_NOT_EXIST) {
         sum += val;
     }
@@ -317,9 +318,9 @@ int main (void) {
         CuSuite* suite = CuSuiteNew();
 
         SUITE_ADD_TEST(suite, basic_test);
-        SUITE_ADD_TEST(suite, concurrent_add_remove_test);
         SUITE_ADD_TEST(suite, basic_iteration_test);
         SUITE_ADD_TEST(suite, big_iteration_test);
+        SUITE_ADD_TEST(suite, concurrent_add_remove_test);
 
         CuSuiteRun(suite);
         CuSuiteDetails(suite, output);

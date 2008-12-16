@@ -13,11 +13,13 @@
 #include "list.h"
 #include "mem.h"
 
-typedef struct ll_iter node_t;
-
-struct ll_iter {
+typedef struct node {
     map_key_t key;
     map_val_t val;
+    uint64_t next; // next node
+} node_t;
+
+struct ll_iter {
     node_t *next;
 };
 
@@ -36,15 +38,15 @@ static node_t *node_alloc (map_key_t key, map_val_t val) {
 list_t *ll_alloc (const datatype_t *key_type) {
     list_t *ll = (list_t *)nbd_malloc(sizeof(list_t));
     ll->key_type = key_type;
-    ll->head = node_alloc(NULL, 0);
-    ll->head->next = NULL;
+    ll->head = node_alloc(0, 0);
+    ll->head->next = DOES_NOT_EXIST;
     return ll;
 }
 
 void ll_free (list_t *ll) {
-    node_t *item = ll->head->next;
+    node_t *item = (node_t *)(size_t)ll->head->next; // the head can't be tagged
     while (item) {
-        node_t *next = (node_t *)STRIP_TAG(item->next, TAG1);
+        node_t *next = (node_t *)(size_t)STRIP_TAG(item->next, TAG1);
         nbd_free(item);
         item = next;
     }
@@ -52,30 +54,30 @@ void ll_free (list_t *ll) {
 
 uint64_t ll_count (list_t *ll) {
     uint64_t count = 0;
-    node_t *item = ll->head->next;
+    node_t *item = (node_t *)(size_t)ll->head->next;
     while (item) {
         if (!IS_TAGGED(item->next, TAG1)) {
             count++;
         }
-        item = (node_t *)STRIP_TAG(item->next, TAG1);
+        item = (node_t *)(size_t)STRIP_TAG(item->next, TAG1);
     }
     return count;
 }
 
 static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_t key, int help_remove) {
     node_t *pred = ll->head;
-    node_t *item = pred->next;
+    node_t *item = (node_t *)(size_t)pred->next;
     TRACE("l2", "find_pred: searching for key %p in list (head is %p)", key, pred);
 
     while (item != NULL) {
-        node_t *next = item->next;
+        uint64_t next = item->next;
 
         // A tag means an item is logically removed but not physically unlinked yet.
         while (EXPECT_FALSE(IS_TAGGED(next, TAG1))) {
 
             // Skip over logically removed items.
             if (!help_remove) {
-                item = (node_t *)STRIP_TAG(item->next, TAG1);
+                item = (node_t *)(size_t)STRIP_TAG(item->next, TAG1);
                 if (EXPECT_FALSE(item == NULL))
                     break;
                 TRACE("l3", "find_pred: skipping marked item %p (next is %p)", item, next);
@@ -84,30 +86,27 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_
             }
 
             // Unlink logically removed items.
-            node_t *other;
             TRACE("l3", "find_pred: unlinking marked item %p next is %p", item, next);
-            if ((other = SYNC_CAS(&pred->next, item, STRIP_TAG(next, TAG1))) == item) {
+
+            uint64_t other = SYNC_CAS(&pred->next, (uint64_t)(size_t)item, STRIP_TAG(next, TAG1));
+            if (other == (uint64_t)(size_t)item) {
                 TRACE("l2", "find_pred: unlinked item %p from pred %p", item, pred);
-                item = (node_t *)STRIP_TAG(next, TAG1);
-                if (EXPECT_FALSE(item == NULL))
-                    break;
-                next = item->next;
+                item = (node_t *)(size_t)STRIP_TAG(next, TAG1);
+                next = (item != NULL) ? item->next : DOES_NOT_EXIST;
                 TRACE("l3", "find_pred: now current item is %p next is %p", item, next);
 
                 // The thread that completes the unlink should free the memory.
                 if (ll->key_type != NULL) {
-                    nbd_defer_free((void*)other->key);
+                    nbd_defer_free((void *)(size_t)((node_t *)(size_t)other)->key);
                 }
-                nbd_defer_free(other);
+                nbd_defer_free(((node_t *)(size_t)other));
             } else {
                 TRACE("l2", "find_pred: lost a race to unlink item %p from pred %p", item, pred);
                 TRACE("l2", "find_pred: pred's link changed to %p", other, 0);
                 if (IS_TAGGED(other, TAG1))
                     return find_pred(pred_ptr, item_ptr, ll, key, help_remove); // retry
-                item = other;
-                if (EXPECT_FALSE(item == NULL))
-                    break;
-                next = item->next;
+                item = (node_t *)(size_t)other;
+                next = (item != NULL) ? item->next : DOES_NOT_EXIST;
             }
         }
 
@@ -121,7 +120,12 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_
         if (EXPECT_TRUE(ll->key_type == NULL)) {
             d = (uint64_t)item->key - (uint64_t)key;
         } else {
-            d = ll->key_type->cmp(item->key, key);
+            d = ll->key_type->cmp((void *)(size_t)item->key, (void *)(size_t)key);
+        }
+
+        if (next != DOES_NOT_EXIST && ((node_t *)next)->key < item->key) {
+            lwt_halt();
+            assert(0);
         }
 
         // If we reached the key (or passed where it should be), we found the right predesssor
@@ -139,7 +143,7 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_
         }
 
         pred = item;
-        item = next;
+        item = (node_t *)(size_t)next;
     }
 
     // <key> is not in <ll>.
@@ -190,10 +194,12 @@ map_val_t ll_cas (list_t *ll, map_key_t key, map_val_t expectation, map_val_t ne
 
             // Create a new item and insert it into the list.
             TRACE("l2", "ll_cas: attempting to insert item between %p and %p", pred, pred->next);
-            map_key_t new_key  = (ll->key_type == NULL) ? key : ll->key_type->clone(key);
+            map_key_t new_key = (ll->key_type == NULL) 
+                              ? key 
+                              : (map_key_t)(size_t)ll->key_type->clone((void *)(size_t)key);
             node_t *new_item = node_alloc(new_key, new_val);
-            node_t *next = new_item->next = old_item;
-            node_t *other = SYNC_CAS(&pred->next, next, new_item);
+            uint64_t next = new_item->next = (uint64_t)(size_t)old_item;
+            uint64_t other = SYNC_CAS(&pred->next, next, new_item);
             if (other == next) {
                 TRACE("l1", "ll_cas: successfully inserted new item %p", new_item, 0);
                 return DOES_NOT_EXIST; // success
@@ -202,7 +208,7 @@ map_val_t ll_cas (list_t *ll, map_key_t key, map_val_t expectation, map_val_t ne
             // Lost a race. Failed to insert the new item into the list.
             TRACE("l1", "ll_cas: lost a race. CAS failed. expected pred's link to be %p but found %p", next, other);
             if (ll->key_type != NULL) {
-                nbd_free(new_key);
+                nbd_free((void *)(size_t)new_key);
             }
             nbd_free(new_item);
             continue; // retry
@@ -250,10 +256,10 @@ map_val_t ll_remove (list_t *ll, map_key_t key) {
     }
 
     // Mark <item> removed. If multiple threads try to remove the same item only one of them should succeed.
-    node_t *next;
-    node_t *old_next = item->next;
+    uint64_t next;
+    uint64_t old_next = item->next;
     do {
-        next = old_next;
+        next     = old_next;
         old_next = SYNC_CAS(&item->next, next, TAG_VALUE(next, TAG1));
         if (IS_TAGGED(old_next, TAG1)) {
             TRACE("l1", "ll_remove: lost a race -- %p is already marked for removal by another thread", item, 0);
@@ -261,7 +267,7 @@ map_val_t ll_remove (list_t *ll, map_key_t key) {
         }
     } while (next != old_next);
     TRACE("l2", "ll_remove: logically removed item %p", item, 0);
-    ASSERT(IS_TAGGED(item->next, TAG1));
+    ASSERT(IS_TAGGED(((volatile node_t *)item)->next, TAG1));
 
     // Atomically swap out the item's value in case another thread is updating the item while we are 
     // removing it. This establishes which operation occurs first logically, the update or the remove. 
@@ -272,15 +278,15 @@ map_val_t ll_remove (list_t *ll, map_key_t key) {
     // item logically removed for a later call (or some other thread) to physically unlink. By marking the
     // item earlier, we logically removed it. 
     TRACE("l2", "ll_remove: unlink the item by linking its pred %p to its successor %p", pred, next);
-    node_t *other;
-    if ((other = SYNC_CAS(&pred->next, item, next)) != item) {
+    uint64_t other;
+    if ((other = SYNC_CAS(&pred->next, (uint64_t)(size_t)item, next)) != (uint64_t)(size_t)item) {
         TRACE("l1", "ll_remove: unlink failed; pred's link changed from %p to %p", item, other);
         return val;
     } 
 
     // The thread that completes the unlink should free the memory.
     if (ll->key_type != NULL) {
-        nbd_defer_free(item->key);
+        nbd_defer_free((void *)(size_t)item->key);
     }
     nbd_defer_free(item);
     TRACE("l1", "ll_remove: successfully unlinked item %p from the list", item, 0);
@@ -288,27 +294,28 @@ map_val_t ll_remove (list_t *ll, map_key_t key) {
 }
 
 void ll_print (list_t *ll) {
-    node_t *item;
-    item = ll->head->next;
+    uint64_t next = ll->head->next;
     int i = 0;
-    while (item) {
-        node_t *next = item->next;
-        if (IS_TAGGED(item, TAG1)) {
+    while (next != DOES_NOT_EXIST) {
+        if (IS_TAGGED(next, TAG1)) {
             printf("*");
         }
-        printf("%p:%p ", item, item->key);
+        node_t *item = (node_t *)(size_t)STRIP_TAG(next, TAG1);
+        if (item == NULL)
+            break;
+        printf("%p:0x%llx ", item, item->key);
         fflush(stdout);
-        item = (node_t *)STRIP_TAG(next, TAG1);
         if (i++ > 30) {
             printf("...");
             break;
         }
+        next = item->next;
     }
     printf("\n");
 }
 
 ll_iter_t *ll_iter_begin (list_t *ll, map_key_t key) {
-    node_t *iter = node_alloc(0,0);
+    ll_iter_t *iter = (ll_iter_t *)nbd_malloc(sizeof(ll_iter_t));
     find_pred(NULL, &iter->next, ll, key, FALSE);
     return iter;
 }
@@ -317,13 +324,13 @@ map_val_t ll_iter_next (ll_iter_t *iter, map_key_t *key_ptr) {
     assert(iter);
     node_t *item = iter->next;
     while (item != NULL && IS_TAGGED(item->next, TAG1)) {
-        item = (node_t *)STRIP_TAG(item->next, TAG1);
+        item = (node_t *)(size_t)STRIP_TAG(item->next, TAG1);
     }
     if (item == NULL) {
         iter->next = NULL;
         return DOES_NOT_EXIST;
     }
-    iter->next = item->next;
+    iter->next = (node_t *)(size_t)STRIP_TAG(item->next, TAG1);
     if (key_ptr != NULL) {
         *key_ptr = item->key;
     }

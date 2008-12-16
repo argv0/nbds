@@ -11,7 +11,7 @@
 #include "skiplist.h"
 #include "hashtable.h"
 
-#define NUM_ITERATIONS 10000000
+#define NUM_ITERATIONS 1000000
 
 //#define TEST_STRING_KEYS
 
@@ -42,9 +42,9 @@ void *worker (void *arg) {
         }
 #else
         if (r & (1 << 8)) {
-            map_set(map_, (void *)(key + 1), 1);
+            map_set(map_, (map_key_t)(key + 1), 1);
         } else {
-            map_remove(map_, (void *)(key + 1));
+            map_remove(map_, (map_key_t)(key + 1));
         }
 #endif
 
@@ -56,7 +56,7 @@ void *worker (void *arg) {
 
 int main (int argc, char **argv) {
     nbd_init();
-    lwt_set_trace_level("l3");
+    lwt_set_trace_level("r0m0l3");
 
     char* program_name = argv[0];
     pthread_t thread[MAX_NUM_THREADS];
