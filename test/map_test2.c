@@ -19,6 +19,7 @@
 #include "skiplist.h"
 #include "hashtable.h"
 #include "lwt.h"
+#include "mem.h"
 
 #define ASSERT_EQUAL(x, y) CuAssertIntEquals(tc, x, y)
 
@@ -48,10 +49,14 @@ void basic_test (CuTest* tc) {
 
 #ifdef TEST_STRING_KEYS
     map_t *map = map_alloc(map_type_, &DATATYPE_NSTRING);
-    nstring_t *k1 = ns_alloc(3); strcpy(k1->data, "k1");
-    nstring_t *k2 = ns_alloc(3); strcpy(k1->data, "k2");
-    nstring_t *k3 = ns_alloc(3); strcpy(k1->data, "k3");
-    nstring_t *k4 = ns_alloc(3); strcpy(k1->data, "k4");
+    nstring_t *s1 = ns_alloc(3); strcpy(s1->data, "k1");
+    nstring_t *s2 = ns_alloc(3); strcpy(s2->data, "k2");
+    nstring_t *s3 = ns_alloc(3); strcpy(s3->data, "k3");
+    nstring_t *s4 = ns_alloc(3); strcpy(s4->data, "k4");
+    map_key_t k1 = (map_key_t)s1;
+    map_key_t k2 = (map_key_t)s2;
+    map_key_t k3 = (map_key_t)s3;
+    map_key_t k4 = (map_key_t)s4;
 #else
     map_t *map = map_alloc(map_type_, NULL);
     map_key_t k1 = (map_key_t)1;
@@ -121,7 +126,7 @@ void basic_test (CuTest* tc) {
 
     rcu_update(); // In a quiecent state.
 #ifdef TEST_STRING_KEYS
-    nbd_free(k1); nbd_free(k2); nbd_free(k3); nbd_free(k4);
+    nbd_free(s1); nbd_free(s2); nbd_free(s3); nbd_free(s4);
 #endif
 }
 
@@ -135,17 +140,16 @@ void *add_remove_worker (void *arg) {
     SYNC_ADD(wd->wait, -1);
     do { } while (*wd->wait); // wait for all workers to be ready
 
-#ifdef TEST_STRING_KEYS
-    nstring_t *key = ns_alloc(9);
-#else
     map_key_t key;
+#ifdef TEST_STRING_KEYS
+    nstring_t *s = ns_alloc(9);
+    key = (map_key_t)s;
 #endif
 
     for (int j = 0; j < 10; ++j) {
         for (int i = d+1; i < iters; i+=2) {
 #ifdef TEST_STRING_KEYS
-            memset(key->data, 0, key->len);
-            snprintf(key->data, key->len, "%llu", i);
+            s->len = 1 + snprintf(s->data, 9, "%u", i);
 #else
             key = (map_key_t)i;
 #endif
@@ -155,8 +159,7 @@ void *add_remove_worker (void *arg) {
         }
         for (int i = d+1; i < iters; i+=2) {
 #ifdef TEST_STRING_KEYS
-            memset(key->data, 0, key->len);
-            snprintf(key->data, key->len, "%u", i);
+            s->len = 1 + snprintf(s->data, 9, "%u", i);
 #else
             key = (map_key_t)i;
 #endif
@@ -165,6 +168,9 @@ void *add_remove_worker (void *arg) {
             rcu_update(); // In a quiecent state.
         }
     }
+#ifdef TEST_STRING_KEYS
+    nbd_free(s);
+#endif
     return NULL;
 }
 
@@ -216,8 +222,10 @@ void concurrent_add_remove_test (CuTest* tc) {
 void basic_iteration_test (CuTest* tc) {
 #ifdef TEST_STRING_KEYS
     map_t *map = map_alloc(map_type_, &DATATYPE_NSTRING);
-    nstring_t *k1 = ns_alloc(3); strcpy(k1->data, "k1");
-    nstring_t *k2 = ns_alloc(3); strcpy(k1->data, "k2");
+    nstring_t *s1 = ns_alloc(3); strcpy(s1->data, "k1");
+    nstring_t *s2 = ns_alloc(3); strcpy(s2->data, "k2");
+    map_key_t k1 = (map_key_t)s1;
+    map_key_t k2 = (map_key_t)s2;
     nstring_t *x_k;
     nstring_t *y_k;
 #else
@@ -233,15 +241,15 @@ void basic_iteration_test (CuTest* tc) {
 
     map_val_t x_v, y_v;
     map_iter_t *iter = map_iter_begin(map, 0);
-    x_v = map_iter_next(iter, &x_k);
-    y_v = map_iter_next(iter, &y_k);
+    x_v = map_iter_next(iter, (map_key_t *)&x_k);
+    y_v = map_iter_next(iter, (map_key_t *)&y_k);
     ASSERT_EQUAL( DOES_NOT_EXIST, map_iter_next(iter, NULL) );
     map_iter_free(iter);
 #ifdef TEST_STRING_KEYS
-    ASSERT_EQUAL( TRUE, (ns_cmp(x_k, k1) == 0 && x_v == 1) || (ns_cmp(y_k, k1) == 0 && y_v == 1) );
-    ASSERT_EQUAL( TRUE, (ns_cmp(x_k, k2) == 0 && x_v == 2) || (ns_cmp(y_k, k2) == 0 && y_v == 2) );
-    nbd_free(k1);
-    nbd_free(k2);
+    ASSERT_EQUAL( TRUE, (ns_cmp(x_k, s1) == 0 && x_v == 1) || (ns_cmp(y_k, s1) == 0 && y_v == 1) );
+    ASSERT_EQUAL( TRUE, (ns_cmp(x_k, s2) == 0 && x_v == 2) || (ns_cmp(y_k, s2) == 0 && y_v == 2) );
+    nbd_free(s1);
+    nbd_free(s2);
 #else
     ASSERT_EQUAL( TRUE, (x_k == k1 && x_v == 1) || (y_k == k1 && y_v == 1) );
     ASSERT_EQUAL( TRUE, (x_k == k2 && x_v == 2) || (y_k == k2 && y_v == 2) );
@@ -255,9 +263,12 @@ void big_iteration_test (CuTest* tc) {
     
 #ifdef TEST_STRING_KEYS
     map_t *map = map_alloc(map_type_, &DATATYPE_NSTRING);
-    nstring_t *key = ns_alloc(9);
-    nstring_t *k3 = ns_alloc(3); strcpy(k1->data, "k3");
-    nstring_t *k4 = ns_alloc(3); strcpy(k1->data, "k4");
+    nstring_t *s = ns_alloc(9);
+    nstring_t *s3 = ns_alloc(3); strcpy(s3->data, "k3");
+    nstring_t *s4 = ns_alloc(3); strcpy(s4->data, "k4");
+    map_key_t k3 = (map_key_t)s3;
+    map_key_t k4 = (map_key_t)s4;
+    map_key_t key = (map_key_t)s;
 #else
     map_t *map = map_alloc(map_type_, NULL);
     map_key_t k3 = (map_key_t)3;
@@ -265,10 +276,9 @@ void big_iteration_test (CuTest* tc) {
     map_key_t key;
 #endif
 
-    for (size_t i = 1; i <= n; ++i) {
+    for (int i = 1; i <= n; ++i) {
 #ifdef TEST_STRING_KEYS
-        memset(key->data, 0, key->len);
-        snprintf(key->data, key->len, "k%llu", i);
+        s->len = 1 + snprintf(s->data, 9, "k%d", i);
 #else
         key = (map_key_t)i;
 #endif
@@ -300,7 +310,7 @@ void big_iteration_test (CuTest* tc) {
     ASSERT_EQUAL(n*(n+1)/2 - (3+4), sum);
         
 #ifdef TEST_STRING_KEYS
-    nbd_free(key);
+    nbd_free(s);
 #endif
 }
 

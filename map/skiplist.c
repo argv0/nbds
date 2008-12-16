@@ -275,12 +275,10 @@ map_val_t sl_cas (skiplist_t *sl, map_key_t key, map_val_t expectation, map_val_
         if (old_item == NULL) {
 
             // There was not an item in the skiplist that matches the key. 
-            if (EXPECT_FALSE((int64_t)expectation > 0 || expectation == CAS_EXPECT_EXISTS)) {
+            if (EXPECT_FALSE(expectation != CAS_EXPECT_DOES_NOT_EXIST && expectation != CAS_EXPECT_WHATEVER)) {
                 TRACE("l1", "sl_cas: the expectation was not met, the skiplist was not changed", 0, 0);
                 return DOES_NOT_EXIST; // failure
             }
-
-            ASSERT(expectation == CAS_EXPECT_DOES_NOT_EXIST || expectation == CAS_EXPECT_WHATEVER);
 
             // First insert <new_item> into the bottom level.
             TRACE("s3", "sl_cas: attempting to insert item between %p and %p", preds[0], nexts[0]);
@@ -470,7 +468,7 @@ void sl_print (skiplist_t *sl) {
     int i = 0;
     while (item) {
         int is_marked = HAS_MARK(item->next[0]);
-        printf("%s%p:0x%llx ", is_marked ? "*" : "", item, (map_key_t)item->key);
+        printf("%s%p:0x%llx ", is_marked ? "*" : "", item, (uint64_t)item->key);
         if (item != sl->head) {
             printf("[%d]", item->top_level);
         } else {
@@ -495,7 +493,11 @@ void sl_print (skiplist_t *sl) {
 
 sl_iter_t *sl_iter_begin (skiplist_t *sl, map_key_t key) {
     sl_iter_t *iter = (sl_iter_t *)nbd_malloc(sizeof(sl_iter_t));
-    find_preds(NULL, &iter->next, 0, sl, key, FALSE);
+    if (key != DOES_NOT_EXIST) {
+        find_preds(NULL, &iter->next, 0, sl, key, FALSE);
+    } else {
+        iter->next = GET_NODE(sl->head->next[0]);
+    }
     return iter;
 }
 

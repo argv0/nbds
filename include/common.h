@@ -32,8 +32,13 @@
 #define TRUE  1
 #define FALSE 0
 
+#ifdef NBD32
+#define TAG1         (1U << 31)
+#define TAG2         (1U << 30)
+#else
 #define TAG1         (1ULL << 63)
 #define TAG2         (1ULL << 62)
+#endif
 #define TAG_VALUE(v, tag) ((v) |  tag)
 #define IS_TAGGED(v, tag) ((v) &  tag)
 #define STRIP_TAG(v, tag) ((v) & ~tag)
@@ -48,7 +53,7 @@ typedef unsigned long long uint64_t;
 typedef unsigned int       uint32_t;
 typedef unsigned char      uint8_t;
 
-typedef uint64_t markable_t;
+typedef size_t markable_t;
 
 #include "lwt.h"
 #endif //COMMON_H

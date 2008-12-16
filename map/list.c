@@ -130,11 +130,6 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_
             d = ll->key_type->cmp((void *)item->key, (void *)key);
         }
 
-        if (next != DOES_NOT_EXIST && GET_NODE(next)->key < item->key) {
-            lwt_halt();
-            assert(0);
-        }
-
         // If we reached the key (or passed where it should be), we found the right predesssor
         if (d >= 0) {
             if (pred_ptr != NULL) {
@@ -192,12 +187,10 @@ map_val_t ll_cas (list_t *ll, map_key_t key, map_val_t expectation, map_val_t ne
         if (!found) {
 
             // There was not an item in the list that matches the key. 
-            if (EXPECT_FALSE((int64_t)expectation > 0 || expectation == CAS_EXPECT_EXISTS)) {
+            if (EXPECT_FALSE(expectation != CAS_EXPECT_DOES_NOT_EXIST && expectation != CAS_EXPECT_WHATEVER)) {
                 TRACE("l1", "ll_cas: the expectation was not met, the list was not changed", 0, 0);
                 return DOES_NOT_EXIST; // failure
             }
-
-            ASSERT(expectation == CAS_EXPECT_DOES_NOT_EXIST || expectation == CAS_EXPECT_WHATEVER);
 
             // Create a new item and insert it into the list.
             TRACE("l2", "ll_cas: attempting to insert item between %p and %p", pred, pred->next);
@@ -308,7 +301,7 @@ void ll_print (list_t *ll) {
         node_t *item = STRIP_MARK(next);
         if (item == NULL)
             break;
-        printf("%p:0x%llx ", item, item->key);
+        printf("%p:0x%llx ", item, (uint64_t)item->key);
         fflush(stdout);
         if (i++ > 30) {
             printf("...");
@@ -321,7 +314,11 @@ void ll_print (list_t *ll) {
 
 ll_iter_t *ll_iter_begin (list_t *ll, map_key_t key) {
     ll_iter_t *iter = (ll_iter_t *)nbd_malloc(sizeof(ll_iter_t));
-    find_pred(NULL, &iter->next, ll, key, FALSE);
+    if (key != DOES_NOT_EXIST) {
+        find_pred(NULL, &iter->next, ll, key, FALSE);
+    } else {
+        iter->next = GET_NODE(ll->head->next);
+    }
     return iter;
 }
 

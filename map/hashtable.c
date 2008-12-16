@@ -18,7 +18,11 @@
 #include "mem.h"
 #include "hashtable.h"
 
+#ifndef NBD32
 #define GET_PTR(x) ((void *)((x) & MASK(48))) // low-order 48 bits is a pointer to a nstring_t
+#else
+#define GET_PTR(x) ((void *)(x))
+#endif
 
 typedef struct entry {
     map_key_t key;
@@ -103,14 +107,18 @@ static volatile entry_t *hti_lookup (hti_t *hti, map_key_t key, uint32_t key_has
                     return ent;
                 }
             } else {
+#ifndef NBD32
                 // The key in <ent> is made up of two parts. The 48 low-order bits are a pointer. The
                 // high-order 16 bits are taken from the hash. The bits from the hash are used as a
                 // quick check to rule out non-equal keys without doing a complete compare.
                 if ((key_hash >> 16) == (ent_key >> 48)) {
+#endif
                     if (hti->ht->key_type->cmp(GET_PTR(ent_key), (void *)key) == 0) {
                         TRACE("h1", "hti_lookup: found entry %p with key %p", ent, GET_PTR(ent_key));
                         return ent;
+#ifndef NBD32
                     }
+#endif
                 }
             }
         }
@@ -184,7 +192,9 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
     assert(ht1->next);
     assert(ht2);
     assert(ht1_ent >= ht1->table && ht1_ent < ht1->table + (1 << ht1->scale));
+#ifndef NBD32
     assert(key_hash == 0 || ht1->ht->key_type == NULL || (key_hash >> 16) == (ht1_ent->key >> 48));
+#endif
 
     map_val_t ht1_ent_val = ht1_ent->val;
     if (EXPECT_FALSE(ht1_ent_val == COPIED_VALUE)) {
@@ -582,7 +592,7 @@ void ht_print (hashtable_t *ht) {
         printf("hti:%p scale:%u count:%d copied:%d\n", hti, hti->scale, hti->count, hti->num_entries_copied);
         for (int i = 0; i < (1 << hti->scale); ++i) {
             volatile entry_t *ent = hti->table + i;
-            printf("[0x%x] 0x%llx:0x%llx\n", i, (uint64_t)ent->key, ent->val);
+            printf("[0x%x] 0x%llx:0x%llx\n", i, (uint64_t)ent->key, (uint64_t)ent->val);
             if (i > 30) {
                 printf("...\n");
                 break;

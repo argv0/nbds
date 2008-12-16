@@ -26,14 +26,14 @@ void *worker (void *arg) {
     do {} while (wait_); 
 
 #ifdef TEST_STRING_KEYS
-        nstring_t *key_str = ns_alloc(10);
+    nstring_t *key_str = ns_alloc(10);
 #endif
 
     for (int i = 0; i < NUM_ITERATIONS/num_threads_; ++i) {
         unsigned r = nbd_rand();
         int key = r & 0xF;
 #ifdef TEST_STRING_KEYS
-        key_str->len = sprintf(key_str->data, "%llX", key) + 1;
+        key_str->len = sprintf(key_str->data, "%X", key) + 1;
         assert(key_str->len <= 10);
         if (r & (1 << 8)) {
             map_set(map_, (map_key_t)key_str, 1);
@@ -66,7 +66,7 @@ int main (int argc, char **argv) {
         return -1;
     }
 
-    num_threads_ = 2;
+    num_threads_ = 1;
     if (argc == 2)
     {
         errno = 0;

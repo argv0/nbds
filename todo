@@ -7,12 +7,14 @@
 + optimize integer keys
 + ht_print()
 + iterators
++ 32 bit support
 
 memory manangement
 ------------------
 - make rcu yield when its buffer gets full instead of throwing an assert
 - alternate memory reclamation schemes: hazard pointers and/or reference counting
 - verify the key management in list, skiplist, and hashtable
+- seperate nbd_malloc/nbd_free into general purpose malloc/free replacement
 
 quality
 -------
@@ -33,7 +35,4 @@ optimization
 
 features
 --------
-- a version of hashtable for 32bit keys and values
-- verify correctness on 32 bit platforms
 - allow values of 0 to be inserted into maps (change DOES_NOT_EXIST to something else)
-- seperate nbd_malloc/nbd_free into general purpose malloc/free replacement
