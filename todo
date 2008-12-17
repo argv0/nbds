@@ -1,4 +1,4 @@
-+ fix makefile to compute dependency info as a side-effect of compilation (-MF)
++ fix makefile to compute dependency lists as a side-effect of compilation (-MF)
 + support integer keys for ht
 + optimize tracing code, still too much overhead
 + use NULL instead of a sentinal node in skiplist and list
@@ -7,21 +7,21 @@
 + optimize integer keys
 + ht_print()
 + iterators
-+ 32 bit support
++ 32 bit x86 support
 
 memory manangement
 ------------------
 - make rcu yield when its buffer gets full instead of throwing an assert
 - alternate memory reclamation schemes: hazard pointers and/or reference counting
-- verify the key management in list, skiplist, and hashtable
 - seperate nbd_malloc/nbd_free into general purpose malloc/free replacement
 
 quality
 -------
+- verify the key management in list, skiplist, and hashtable
 - transaction tests
 - port perf tests from lib-high-scale
-- characterize the performance of hashtable, list and skiplist
-- validate arguments in interface functions
+- characterize the performance of hashtable vs. skiplist vs. list
+- validate function arguments in interface functions
 - document usage of the library
 - document algorithms
 
@@ -35,4 +35,4 @@ optimization
 
 features
 --------
-- allow values of 0 to be inserted into maps (change DOES_NOT_EXIST to something else)
+- allow values of 0 to be inserted into maps (change DOES_NOT_EXIST to something other than 0)

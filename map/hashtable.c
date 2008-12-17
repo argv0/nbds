@@ -35,7 +35,7 @@ typedef struct hti {
     struct hti *next;
     unsigned scale;
     int max_probe;
-    int references;
+    int ref_count;
     int count; // TODO: make these counters distributed
     int num_entries_copied;
     int copy_scan;
@@ -51,7 +51,7 @@ struct ht {
     const datatype_t *key_type;
 };
 
-static const map_val_t COPIED_VALUE           = -1;
+static const map_val_t COPIED_VALUE           = TAG_VALUE(DOES_NOT_EXIST, TAG1);
 static const map_val_t TOMBSTONE              = STRIP_TAG(-1, TAG1);
 
 static const unsigned ENTRIES_PER_BUCKET     = CACHE_LINE_SIZE/sizeof(entry_t);
@@ -150,6 +150,7 @@ static hti_t *hti_alloc (hashtable_t *parent, int scale) {
     }
 
     hti->ht = parent;
+    hti->ref_count = 1; // one for the parent
 
     assert(hti->scale >= MIN_SCALE && hti->scale < 63); // size must be a power of 2
     assert(sizeof(entry_t) * ENTRIES_PER_BUCKET % CACHE_LINE_SIZE == 0); // divisible into cache
@@ -197,7 +198,7 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
 #endif
 
     map_val_t ht1_ent_val = ht1_ent->val;
-    if (EXPECT_FALSE(ht1_ent_val == COPIED_VALUE)) {
+    if (EXPECT_FALSE(ht1_ent_val == COPIED_VALUE || ht1_ent_val == TAG_VALUE(TOMBSTONE, TAG1))) {
         TRACE("h1", "hti_copy_entry: entry %p already copied to table %p", ht1_ent, ht2);
         return FALSE; // already copied
     }
@@ -209,37 +210,27 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
             TRACE("h1", "hti_copy_entry: empty entry %p killed", ht1_ent, 0);
             return TRUE;
         }
-        if (ht1_ent_val == COPIED_VALUE) {
-            TRACE("h0", "hti_copy_entry: lost race to kill empty entry %p; the entry is already killed", ht1_ent, 0);
-            return FALSE; // another thread beat us to it
-        }
         TRACE("h0", "hti_copy_entry: lost race to kill empty entry %p; the entry is not empty", ht1_ent, 0);
     }
 
     // Tag the value in the old entry to indicate a copy is in progress.
     ht1_ent_val = SYNC_FETCH_AND_OR(&ht1_ent->val, TAG_VALUE(0, TAG1));
     TRACE("h2", "hti_copy_entry: tagged the value %p in old entry %p", ht1_ent_val, ht1_ent);
-    if (ht1_ent_val == COPIED_VALUE) {
+    if (ht1_ent_val == COPIED_VALUE || ht1_ent_val == TAG_VALUE(TOMBSTONE, TAG1)) {
         TRACE("h1", "hti_copy_entry: entry %p already copied to table %p", ht1_ent, ht2);
         return FALSE; // <value> was already copied by another thread.
     }
+
+    // The old table's dead entries don't need to be copied to the new table
+    if (ht1_ent_val == TOMBSTONE)
+        return TRUE; 
 
     // Install the key in the new table.
     map_key_t ht1_ent_key = ht1_ent->key;
     map_key_t key = (ht1->ht->key_type == NULL) ? (map_key_t)ht1_ent_key : (map_key_t)GET_PTR(ht1_ent_key);
 
-    // The old table's dead entries don't need to be copied to the new table, but their keys need to be freed.
-    assert(COPIED_VALUE == TAG_VALUE(TOMBSTONE, TAG1));
-    if (ht1_ent_val == TOMBSTONE) {
-        TRACE("h1", "hti_copy_entry: entry %p old value was deleted, now freeing key %p", ht1_ent, key);
-        if (EXPECT_FALSE(ht1->ht->key_type != NULL)) {
-            nbd_defer_free((void *)key);
-        }
-        return TRUE; 
-    }
-
     // We use 0 to indicate that <key_hash> is uninitiallized. Occasionally the key's hash will really be 0 and we
-    // waste time recomputing it every time. It is rare enough (1 in 65k) that it won't hurt performance. 
+    // waste time recomputing it every time. It is rare enough that it won't hurt performance. 
     if (key_hash == 0) { 
         key_hash = (ht1->ht->key_type == NULL) 
                  ? murmur32_8b(ht1_ent_key) 
@@ -340,10 +331,12 @@ static map_val_t hti_cas (hti_t *hti, map_key_t key, uint32_t key_hash, map_val_
         map_key_t new_key = (hti->ht->key_type == NULL) 
                           ? (map_key_t)key 
                           : (map_key_t)hti->ht->key_type->clone((void *)key);
+#ifndef NBD32
         if (EXPECT_FALSE(hti->ht->key_type != NULL)) {
             // Combine <new_key> pointer with bits from its hash 
             new_key = ((uint64_t)(key_hash >> 16) << 48) | new_key; 
         }
+#endif
 
         // CAS the key into the table.
         map_key_t old_ent_key = SYNC_CAS(&ent->key, DOES_NOT_EXIST, new_key);
@@ -367,7 +360,7 @@ static map_val_t hti_cas (hti_t *hti, map_key_t key, uint32_t key_hash, map_val_
     // If the entry is in the middle of a copy, the copy must be completed first.
     map_val_t ent_val = ent->val;
     if (EXPECT_FALSE(IS_TAGGED(ent_val, TAG1))) {
-        if (ent_val != COPIED_VALUE) {
+        if (ent_val != COPIED_VALUE && ent_val != TAG_VALUE(TOMBSTONE, TAG1)) {
             int did_copy = hti_copy_entry(hti, ent, key_hash, ((volatile hti_t *)hti)->next);
             if (did_copy) {
                 SYNC_ADD(&hti->num_entries_copied, 1);
@@ -434,7 +427,7 @@ static map_val_t hti_get (hti_t *hti, map_key_t key, uint32_t key_hash) {
     // If the entry is being copied, finish the copy and retry on the next table.
     map_val_t ent_val = ent->val;
     if (EXPECT_FALSE(IS_TAGGED(ent_val, TAG1))) {
-        if (EXPECT_FALSE(ent_val != COPIED_VALUE)) {
+        if (EXPECT_FALSE(ent_val != COPIED_VALUE && ent_val != TAG_VALUE(TOMBSTONE, TAG1))) {
             int did_copy = hti_copy_entry(hti, ent, key_hash, ((volatile hti_t *)hti)->next);
             if (did_copy) {
                 SYNC_ADD(&hti->num_entries_copied, 1);
@@ -453,7 +446,7 @@ map_val_t ht_get (hashtable_t *ht, map_key_t key) {
 }
 
 // returns TRUE if copy is done
-int hti_help_copy (hti_t *hti) {
+static int hti_help_copy (hti_t *hti) {
     volatile entry_t *ent;
     size_t limit; 
     size_t total_copied = hti->num_entries_copied;
@@ -495,6 +488,31 @@ int hti_help_copy (hti_t *hti) {
     return (total_copied == (1 << hti->scale));
 }
 
+static void hti_defer_free (hti_t *hti) {
+    assert(hti->ref_count == 0);
+
+    for (uint32_t i = 0; i < (1 << hti->scale); ++i) {
+        map_key_t key = hti->table[i].key;
+        map_val_t val = hti->table[i].val;
+        if (val == COPIED_VALUE)
+            continue;
+        assert(!IS_TAGGED(val, TAG1) || val == TAG_VALUE(TOMBSTONE, TAG1)); // copy not in progress
+        if (hti->ht->key_type != NULL && key != DOES_NOT_EXIST) {
+            nbd_defer_free(GET_PTR(key));
+        }
+    }
+    nbd_defer_free((void *)hti->table);
+    nbd_defer_free(hti);
+}
+
+static void hti_release (hti_t *hti) {
+    assert(hti->ref_count > 0);
+    int ref_count = SYNC_ADD(&hti->ref_count, -1);
+    if (ref_count == 0) {
+        hti_defer_free(hti);
+    }
+}
+
 //
 map_val_t ht_cas (hashtable_t *ht, map_key_t key, map_val_t expected_val, map_val_t new_val) {
 
@@ -509,16 +527,11 @@ map_val_t ht_cas (hashtable_t *ht, map_key_t key, map_val_t expected_val, map_va
     if (EXPECT_FALSE(hti->next != NULL)) {
         int done = hti_help_copy(hti);
 
-        // Dispose of fully copied tables.
-        if (done && hti->references == 0) {
-
-            int r = SYNC_CAS(&hti->references, 0, -1);
-            if (r == 0) {
-                assert(hti->next);
-                if (SYNC_CAS(&ht->hti, hti, hti->next) == hti) {
-                    nbd_defer_free((void *)hti->table); 
-                    nbd_defer_free(hti); 
-                }
+        // Unlink fully copied tables.
+        if (done) {
+            assert(hti->next);
+            if (SYNC_CAS(&ht->hti, hti, hti->next) == hti) {
+                hti_release(hti);
             }
         }
     }
@@ -572,15 +585,9 @@ hashtable_t *ht_alloc (const datatype_t *key_type) {
 void ht_free (hashtable_t *ht) {
     hti_t *hti = ht->hti;
     do {
-        for (uint32_t i = 0; i < (1 << hti->scale); ++i) {
-            assert(hti->table[i].val == COPIED_VALUE || !IS_TAGGED(hti->table[i].val, TAG1));
-            if (ht->key_type != NULL && hti->table[i].key != DOES_NOT_EXIST) {
-                nbd_free(GET_PTR(hti->table[i].key));
-            }
-        }
         hti_t *next = hti->next;
-        nbd_free((void *)hti->table);
-        nbd_free(hti);
+        assert(hti->ref_count == 1);
+        hti_release(hti);
         hti = next;
     } while (hti);
     nbd_free(ht);
@@ -603,22 +610,20 @@ void ht_print (hashtable_t *ht) {
 }
 
 ht_iter_t *ht_iter_begin (hashtable_t *ht, map_key_t key) {
-    hti_t *hti = ht->hti;
-    int rcount;
+    hti_t *hti;
+    int ref_count;
     do {
-        while (((volatile hti_t *)hti)->next != NULL) {
+        hti = ht->hti;
+        while (hti->next != NULL) {
             do { } while (hti_help_copy(hti) != TRUE);
             hti = hti->next;
         }
-
-        int old = hti->references;
         do {
-            rcount = old;
-            if (rcount != -1) {
-                old = SYNC_CAS(&hti->references, rcount, rcount + 1);
-            }
-        } while (rcount != old);
-    } while (rcount == -1);
+            ref_count = hti->ref_count;
+            if(ref_count == 0)
+                break;
+        } while (ref_count != SYNC_CAS(&hti->ref_count, ref_count, ref_count + 1));
+    } while (ref_count == 0);
 
     ht_iter_t *iter = nbd_malloc(sizeof(ht_iter_t));
     iter->hti = hti;
@@ -657,6 +662,6 @@ map_val_t ht_iter_next (ht_iter_t *iter, map_key_t *key_ptr) {
 }
 
 void ht_iter_free (ht_iter_t *iter) {
-    SYNC_ADD(&iter->hti->references, -1);
+    hti_release(iter->hti);
     nbd_free(iter);
 }

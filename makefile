@@ -5,7 +5,7 @@
 # Makefile for building programs with whole-program interfile optimization
 ###################################################################################################
 OPT	   := -fwhole-program -combine -03 #-DNDEBUG
-CFLAGS := -g -Wall -Werror -std=c99 $(OPT) -m64 #-DNBD32 #-DENABLE_TRACE
+CFLAGS := -g -Wall -Werror -std=c99 $(OPT) -m64 -DTEST_STRING_KEYS #-DNBD32 #-DENABLE_TRACE
 INCS   := $(addprefix -I, include)
 TESTS  := output/map_test1 output/map_test2 output/txn_test
 EXES   := $(TESTS)

@@ -12,16 +12,16 @@
 // 2. It will not produce the same results on little-endian and big-endian
 //    machines.
 
-static inline unsigned int murmur32 (const char *key, int len)
+static inline uint32_t murmur32 (const char *key, int len)
 {
 	// 'm' and 'r' are mixing constants generated offline.
 	// They're not really 'magic', they just happen to work well.
 
-	const unsigned int m = 0x5bd1e995;
+	const uint32_t m = 0x5bd1e995;
 	const int r = 24;
 
 	// Initialize the hash to a 'random' value
-	unsigned int h = len;
+	uint32_t h = len;
 
 	// Mix 4 bytes at a time into the hash
 
@@ -62,16 +62,16 @@ static inline unsigned int murmur32 (const char *key, int len)
 	return h;
 } 
 
-static inline unsigned int murmur32_8b (uint64_t key)
+static inline uint32_t murmur32_8b (uint64_t key)
 {
     // 'm' and 'r' are mixing constants generated offline.
     // They're not really 'magic', they just happen to work well.
 
-    const unsigned int m = 0x5bd1e995;
+    const uint32_t m = 0x5bd1e995;
     const int r = 24;
 
     // Initialize the hash to a 'random' value
-    unsigned int h = 8;
+    uint32_t h = 8;
 
     const unsigned char *data = (const unsigned char *)&key;
 
@@ -92,6 +92,38 @@ static inline unsigned int murmur32_8b (uint64_t key)
     h ^= k1;
     h *= m; 
     h ^= k2;
+
+    // Do a few final mixes of the hash to ensure the last few
+    // bytes are well-incorporated.
+
+    h ^= h >> 13;
+    h *= m;
+    h ^= h >> 15;
+
+    return h;
+}
+
+static inline uint32_t murmur32_4b (uint32_t key)
+{
+    // 'm' and 'r' are mixing constants generated offline.
+    // They're not really 'magic', they just happen to work well.
+
+    const uint32_t m = 0x5bd1e995;
+    const int r = 24;
+
+    // Initialize the hash to a 'random' value
+    uint32_t h = 4;
+
+    uint32_t k = *(uint32_t *)&key;
+
+    k *= m; 
+    k ^= k >> r; 
+    k *= m; 
+
+    // Mix 4 bytes at a time into the hash
+
+    h *= m; 
+    h ^= k;
 
     // Do a few final mixes of the hash to ensure the last few
     // bytes are well-incorporated.
