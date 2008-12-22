@@ -30,7 +30,7 @@ typedef struct haz_local {
     int dynamic_size;
     int dynamic_count;
 
-} haz_local_t;
+} __attribute__ ((aligned(CACHE_LINE_SIZE))) haz_local_t;
 
 static haz_local_t haz_local_[MAX_NUM_THREADS] = {};
 
@@ -114,7 +114,8 @@ void haz_defer_free (void *d, free_t f) {
         l->pending_count = conflicts_count;
         nbd_free(hazards);
     }
-    l->pending[ l->pending_count ].ptr  = d;
+    assert(l->pending_size > l->pending_count);
+    l->pending[ l->pending_count ].ptr   = d;
     l->pending[ l->pending_count ].free_ = f;
     l->pending_count++;
 }
@@ -123,6 +124,7 @@ haz_t *haz_get_static (int i) {
     if (i >= STATIC_HAZ_PER_THREAD)
         return NULL;
     LOCALIZE_THREAD_LOCAL(tid_, int);
+    assert(i < STATIC_HAZ_PER_THREAD);
     return &haz_local_[tid_].static_haz[i];
 }
 
@@ -131,8 +133,9 @@ void haz_register_dynamic (haz_t *haz) {
     haz_local_t *l = haz_local_ + tid_;
 
     if (l->dynamic_size == 0) {
-        l->dynamic_size = MAX_NUM_THREADS * STATIC_HAZ_PER_THREAD;
-        l->dynamic = nbd_malloc(sizeof(haz_t *) * l->dynamic_size);
+        int n = MAX_NUM_THREADS * STATIC_HAZ_PER_THREAD;
+        l->dynamic = nbd_malloc(sizeof(haz_t *) * n);
+        l->dynamic_size = n;
     }
 
     if (l->dynamic_count == l->dynamic_size) {
@@ -154,7 +157,7 @@ void haz_unregister_dynamic (void **haz) {
     for (int i = 0; i < l->dynamic_count; ++i) {
         if (l->dynamic[i] == haz) {
             if (i != l->dynamic_count - 1) {
-                l->dynamic[i] = l->dynamic[ l->dynamic_count ];
+                l->dynamic[i] = l->dynamic[ l->dynamic_count - 1 ];
             }
             l->dynamic_count--;
             return;
