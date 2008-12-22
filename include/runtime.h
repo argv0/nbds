@@ -2,12 +2,14 @@
  * Written by Josh Dybnis and released to the public domain, as explained at
  * http://creativecommons.org/licenses/publicdomain
  */
-#ifndef THREADS_H
-#define THREADS_H
+#ifndef RUNTIME_H
+#define RUNTIME_H
 
-void nbd_init (void);
+#include "tls.h"
+
+extern DECLARE_THREAD_LOCAL(tid_, int);
+
 int nbd_thread_create (pthread_t *restrict thread, int thread_id, void *(*start_routine)(void *), void *restrict arg);
 int nbd_rand (void);
-void rcu_update (void);
 
-#endif//THREADS_H
+#endif//RUNTIME_H

@@ -20,6 +20,7 @@
 #include "hashtable.h"
 #include "lwt.h"
 #include "mem.h"
+#include "rcu.h"
 
 #define ASSERT_EQUAL(x, y) CuAssertIntEquals(tc, x, y)
 
@@ -316,8 +317,7 @@ void big_iteration_test (CuTest* tc) {
 
 int main (void) {
 
-    nbd_init();
-    lwt_set_trace_level("h3");
+    lwt_set_trace_level("l3");
 
     static const map_impl_t *map_types[] = { &ll_map_impl, &sl_map_impl, &ht_map_impl };
     for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {
@@ -327,10 +327,10 @@ int main (void) {
         CuString *output = CuStringNew();
         CuSuite* suite = CuSuiteNew();
 
+        SUITE_ADD_TEST(suite, concurrent_add_remove_test);
         SUITE_ADD_TEST(suite, basic_test);
         SUITE_ADD_TEST(suite, basic_iteration_test);
         SUITE_ADD_TEST(suite, big_iteration_test);
-        SUITE_ADD_TEST(suite, concurrent_add_remove_test);
 
         CuSuiteRun(suite);
         CuSuiteDetails(suite, output);

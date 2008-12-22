@@ -21,9 +21,10 @@
 #include <string.h>
 
 #include "common.h"
-#include "runtime.h"
 #include "skiplist.h"
+#include "runtime.h"
 #include "mem.h"
+#include "rcu.h"
 
 // Setting MAX_LEVEL to 0 essentially makes this data structure the Harris-Michael lock-free list (in list.c).
 #define MAX_LEVEL 31
@@ -170,9 +171,9 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
                     if (level == 0) {
                         node_t *unlinked = GET_NODE(other);
                         if (sl->key_type != NULL) {
-                            nbd_defer_free((void *)unlinked->key);
+                            rcu_defer_free((void *)unlinked->key);
                         }
-                        nbd_defer_free(unlinked);
+                        rcu_defer_free(unlinked);
                     }
                 } else {
                     TRACE("s3", "find_preds: lost race to unlink item %p from pred %p", item, pred);
@@ -438,9 +439,9 @@ map_val_t sl_remove (skiplist_t *sl, map_key_t key) {
         TRACE("s2", "sl_remove: unlinked item %p from the skiplist at level 0", item, 0);
         // The thread that completes the unlink should free the memory.
         if (sl->key_type != NULL) {
-            nbd_defer_free((void *)item->key);
+            rcu_defer_free((void *)item->key);
         }
-        nbd_defer_free(item);
+        rcu_defer_free(item);
     }
     return val;
 }

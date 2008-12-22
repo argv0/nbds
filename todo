@@ -11,13 +11,15 @@
 
 memory manangement
 ------------------
-- make rcu yield when its buffer gets full instead of throwing an assert
+- allow threads to dynamically enter and exit rcu's token ring
+- augment rcu with heartbeat manager to kill stalled threads
+- make rcu try yielding when its buffer gets full
 - alternate memory reclamation schemes: hazard pointers and/or reference counting
 - seperate nbd_malloc/nbd_free into general purpose malloc/free replacement
 
 quality
 -------
-- verify the key management in list, skiplist, and hashtable
+- verify the key memory management in list, skiplist, and hashtable
 - transaction tests
 - port perf tests from lib-high-scale
 - characterize the performance of hashtable vs. skiplist vs. list

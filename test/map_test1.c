@@ -7,6 +7,7 @@
 #include "nstring.h"
 #include "runtime.h"
 #include "map.h"
+#include "rcu.h"
 #include "list.h"
 #include "skiplist.h"
 #include "hashtable.h"
@@ -55,7 +56,6 @@ void *worker (void *arg) {
 }
 
 int main (int argc, char **argv) {
-    nbd_init();
     lwt_set_trace_level("r0m0l3");
 
     char* program_name = argv[0];
@@ -66,7 +66,7 @@ int main (int argc, char **argv) {
         return -1;
     }
 
-    num_threads_ = 1;
+    num_threads_ = MAX_NUM_THREADS;
     if (argc == 2)
     {
         errno = 0;

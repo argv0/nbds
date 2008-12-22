@@ -12,6 +12,11 @@
 #include "common.h"
 #include "list.h"
 #include "mem.h"
+#ifdef LIST_USE_HAZARD_POINTER
+#include "hazard.h"
+#else
+#include "rcu.h"
+#endif
 
 typedef struct node {
     map_key_t  key;
@@ -20,7 +25,7 @@ typedef struct node {
 } node_t;
 
 struct ll_iter {
-    node_t *next;
+    node_t *pred;
 };
 
 struct ll {
@@ -53,6 +58,9 @@ void ll_free (list_t *ll) {
     node_t *item = STRIP_MARK(ll->head->next);
     while (item != NULL) {
         node_t *next = STRIP_MARK(item->next);
+        if (ll->key_type != NULL) {
+            nbd_free((void *)item->key);
+        }
         nbd_free(item);
         item = next;
     }
@@ -70,12 +78,27 @@ size_t ll_count (list_t *ll) {
     return count;
 }
 
+#ifdef LIST_USE_HAZARD_POINTER
+static void nbd_free_node (node_t *x) {
+    nbd_free((void *)x->key);
+    nbd_free(x);
+}
+#endif
+
 static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_t key, int help_remove) {
     node_t *pred = ll->head;
     node_t *item = GET_NODE(pred->next);
     TRACE("l2", "find_pred: searching for key %p in list (head is %p)", key, pred);
+#ifdef LIST_USE_HAZARD_POINTER
+    haz_t *temp, *hp0 = haz_get_static(0), *hp1 = haz_get_static(1);
+#endif
 
     while (item != NULL) {
+#ifdef LIST_USE_HAZARD_POINTER
+        haz_set(hp0, item);
+        if (STRIP_MARK(pred->next) != item)
+            return find_pred(pred_ptr, item_ptr, ll, key, help_remove); // retry
+#endif
         markable_t next = item->next;
 
         // A mark means the node is logically removed but not physically unlinked yet.
@@ -102,11 +125,15 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_
                 TRACE("l3", "find_pred: now current item is %p next is %p", item, next);
 
                 // The thread that completes the unlink should free the memory.
-                node_t *unlinked = GET_NODE(other);
+#ifdef LIST_USE_HAZARD_POINTER
+                free_t free_ = (ll->key_type != NULL ? (free_t)nbd_free_node : nbd_free);
+                haz_defer_free(GET_NODE(other), free_);
+#else
                 if (ll->key_type != NULL) {
-                    nbd_defer_free((void *)unlinked->key);
+                    rcu_defer_free((void *)GET_NODE(other)->key);
                 }
-                nbd_defer_free(unlinked);
+                rcu_defer_free(GET_NODE(other));
+#endif
             } else {
                 TRACE("l2", "find_pred: lost a race to unlink item %p from pred %p", item, pred);
                 TRACE("l2", "find_pred: pred's link changed to %p", other, 0);
@@ -135,7 +162,9 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_
             if (pred_ptr != NULL) {
                 *pred_ptr = pred;
             }
-            *item_ptr = item;
+            if (item_ptr != NULL) {
+                *item_ptr = item;
+            }
             if (d == 0) {
                 TRACE("l2", "find_pred: found matching item %p in list, pred is %p", item, pred);
                 return TRUE;
@@ -145,6 +174,9 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_
         }
 
         pred = item;
+#ifdef LIST_USE_HAZARD_POINTER
+        temp = hp0; hp0 = hp1; hp1 = temp;
+#endif
         item = GET_NODE(next);
     }
 
@@ -283,10 +315,15 @@ map_val_t ll_remove (list_t *ll, map_key_t key) {
     } 
 
     // The thread that completes the unlink should free the memory.
+#ifdef LIST_USE_HAZARD_POINTER
+    free_t free_ = (ll->key_type != NULL ? (free_t)nbd_free_node : nbd_free);
+    haz_defer_free(GET_NODE(item), free_);
+#else
     if (ll->key_type != NULL) {
-        nbd_defer_free((void *)item->key);
+        rcu_defer_free((void *)item->key);
     }
-    nbd_defer_free(item);
+    rcu_defer_free(item);
+#endif
     TRACE("l1", "ll_remove: successfully unlinked item %p from the list", item, 0);
     return val;
 }
@@ -295,13 +332,10 @@ void ll_print (list_t *ll) {
     markable_t next = ll->head->next;
     int i = 0;
     while (next != DOES_NOT_EXIST) {
-        if (HAS_MARK(next)) {
-            printf("*");
-        }
         node_t *item = STRIP_MARK(next);
         if (item == NULL)
             break;
-        printf("%p:0x%llx ", item, (uint64_t)item->key);
+        printf("%s%p:0x%llx ", HAS_MARK(item->next) ? "*" : "", item, (uint64_t)item->key);
         fflush(stdout);
         if (i++ > 30) {
             printf("...");
@@ -315,30 +349,49 @@ void ll_print (list_t *ll) {
 ll_iter_t *ll_iter_begin (list_t *ll, map_key_t key) {
     ll_iter_t *iter = (ll_iter_t *)nbd_malloc(sizeof(ll_iter_t));
     if (key != DOES_NOT_EXIST) {
-        find_pred(NULL, &iter->next, ll, key, FALSE);
+        find_pred(&iter->pred, NULL, ll, key, FALSE);
     } else {
-        iter->next = GET_NODE(ll->head->next);
+        iter->pred = ll->head;
     }
+#ifdef LIST_USE_HAZARD_POINTER
+    haz_register_dynamic((void **)&iter->pred);
+#endif
     return iter;
 }
 
 map_val_t ll_iter_next (ll_iter_t *iter, map_key_t *key_ptr) {
     assert(iter);
-    node_t *item = iter->next;
-    while (item != NULL && HAS_MARK(item->next)) {
-        item = STRIP_MARK(item->next);
-    }
-    if (item == NULL) {
-        iter->next = NULL;
+    if (iter->pred == NULL)
         return DOES_NOT_EXIST;
-    }
-    iter->next = STRIP_MARK(item->next);
+
+    // advance iterator to next item; skip items that have been removed
+    markable_t item;
+#ifdef LIST_USE_HAZARD_POINTER 
+    haz_t *hp0 = haz_get_static(0);
+#endif
+    do {
+#ifndef LIST_USE_HAZARD_POINTER 
+        item = iter->pred->next;
+#else //LIST_USE_HAZARD_POINTER 
+        do {
+            item = iter->pred->next;
+            haz_set(hp0, STRIP_MARK(item));
+        } while (item != ((volatile node_t *)iter->pred)->next);
+#endif//LIST_USE_HAZARD_POINTER
+        iter->pred = STRIP_MARK(item);
+        if (iter->pred == NULL)
+            return DOES_NOT_EXIST;
+    } while (HAS_MARK(item));
+
     if (key_ptr != NULL) {
-        *key_ptr = item->key;
+        *key_ptr = GET_NODE(item)->key;
     }
-    return item->val;
+    return GET_NODE(item)->val;
 }
 
 void ll_iter_free (ll_iter_t *iter) {
+#ifdef LIST_USE_HAZARD_POINTER
+    haz_unregister_dynamic((void **)&iter->pred);
+#endif
     nbd_free(iter);
 }

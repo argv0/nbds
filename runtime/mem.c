@@ -11,7 +11,7 @@
 #include "rlocal.h"
 #include "lwt.h"
 
-#define GET_SCALE(n) (sizeof(n)*8-__builtin_clzl((n)-1)) // log2 of <n>, rounded up
+#define GET_SCALE(n) (sizeof(void *)*__CHAR_BIT__ - __builtin_clzl((n) - 1)) // log2 of <n>, rounded up
 #define MAX_SCALE 31 // allocate blocks up to 4GB in size (arbitrary, could be bigger)
 #define REGION_SCALE 22 // 4MB regions
 #define REGION_SIZE (1 << REGION_SCALE)
@@ -67,6 +67,9 @@ void nbd_free (void *x) {
     block_t  *b = (block_t *)x;
     assert(((size_t)b >> REGION_SCALE) < ((1 << HEADER_REGION_SCALE) / sizeof(header_t)));
     header_t *h = region_header_ + ((size_t)b >> REGION_SCALE);
+#ifndef NDEBUG
+    memset(b, 0xcd, (1 << h->scale));
+#endif
     TRACE("m0", "nbd_free(): block %p scale %llu", b, h->scale);
     if (h->owner == tid_) {
         TRACE("m0", "nbd_free(): private block, free list head %p", 
@@ -76,8 +79,9 @@ void nbd_free (void *x) {
     } else {
         TRACE("m0", "nbd_free(): owner %llu free list head %p", 
                     h->owner, pub_free_list_[h->owner][h->scale][tid_]);
-        b->next = pub_free_list_[h->owner][h->scale][tid_];
-        pub_free_list_[h->owner][h->scale][tid_] = b;
+        do {
+            b->next = pub_free_list_[h->owner][h->scale][tid_];
+        } while (SYNC_CAS(&pub_free_list_[h->owner][h->scale][tid_], b->next, b) != b->next);
     }
 }
 

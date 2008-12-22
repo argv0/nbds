@@ -16,6 +16,7 @@
 #include "common.h"
 #include "murmur.h"
 #include "mem.h"
+#include "rcu.h"
 #include "hashtable.h"
 
 #ifndef NBD32
@@ -498,11 +499,11 @@ static void hti_defer_free (hti_t *hti) {
             continue;
         assert(!IS_TAGGED(val, TAG1) || val == TAG_VALUE(TOMBSTONE, TAG1)); // copy not in progress
         if (hti->ht->key_type != NULL && key != DOES_NOT_EXIST) {
-            nbd_defer_free(GET_PTR(key));
+            rcu_defer_free(GET_PTR(key));
         }
     }
-    nbd_defer_free((void *)hti->table);
-    nbd_defer_free(hti);
+    rcu_defer_free((void *)hti->table);
+    rcu_defer_free(hti);
 }
 
 static void hti_release (hti_t *hti) {

@@ -5,6 +5,7 @@
 #include "common.h"
 #include "txn.h"
 #include "mem.h"
+#include "rcu.h"
 #include "skiplist.h"
 
 #define UNDETERMINED_VERSION 0
@@ -196,8 +197,8 @@ void txn_abort (txn_t *txn) {
         update->version = ABORTED_VERSION;
     }
 
-    nbd_defer_free(txn->writes);
-    nbd_defer_free(txn);
+    rcu_defer_free(txn->writes);
+    rcu_defer_free(txn);
 }
 
 txn_state_e txn_commit (txn_t *txn) {
@@ -228,8 +229,8 @@ txn_state_e txn_commit (txn_t *txn) {
         }
     } while (old_count != temp);
 
-    nbd_defer_free(txn->writes);
-    nbd_defer_free(txn);
+    rcu_defer_free(txn->writes);
+    rcu_defer_free(txn);
 
     return state;
 }
@@ -341,7 +342,7 @@ map_val_t txn_map_get (txn_t *txn, map_key_t key) {
         }
         if (update->version <= min_active_version) {
             if (map_cas(txn->map, key, TAG_VALUE(val, TAG2), value) == TAG_VALUE(val, TAG2)) {
-                nbd_defer_free(update);
+                rcu_defer_free(update);
             }
         }
     }

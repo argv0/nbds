@@ -11,10 +11,6 @@
 #include <string.h>
 #include <sys/types.h>
 
-#define malloc "DON'T USE MALLOC" // use nbd_malloc() instead
-#define calloc "DON'T USE CALLOC" // use nbd_malloc() instead
-#define free   "DON'T USE FREE"   // use nbd_free() instead
-
 #define MAX_NUM_THREADS 4 // make this whatever you want, but make it a power of 2
 
 #define CACHE_LINE_SIZE 64

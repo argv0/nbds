@@ -18,7 +18,7 @@ typedef struct thread_info {
     void *restrict arg;
 } thread_info_t;
 
-void nbd_init (void) {
+__attribute__ ((constructor)) void nbd_init (void) {
     sranddev();
     INIT_THREAD_LOCAL(rand_seed_);
     INIT_THREAD_LOCAL(tid_);

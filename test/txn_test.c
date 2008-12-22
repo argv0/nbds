@@ -26,7 +26,6 @@ void test1 (CuTest* tc) {
 
 int main (void) {
 
-    nbd_init();
     txn_init();
 
     CuString *output = CuStringNew();
