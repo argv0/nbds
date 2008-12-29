@@ -11,8 +11,6 @@ typedef enum { TXN_RUNNING, TXN_VALIDATING, TXN_VALIDATED, TXN_ABORTED } txn_sta
 
 typedef struct txn txn_t;
 
-void txn_init (void);
-
 txn_t *     txn_begin  (map_t *map);
 void        txn_abort  (txn_t *txn);
 txn_state_e txn_commit (txn_t *txn);

@@ -1,9 +1,12 @@
+#define _POSIX_C_SOURCE 1 // for rand_r
 #include <stdio.h>
 #include <errno.h>
 #include <pthread.h>
+#include <sys/time.h>
 #include "common.h"
 #include "runtime.h"
 #include "mem.h"
+#include "rcu.h"
 
 #define NUM_ITERATIONS 10000000
 
@@ -65,7 +68,7 @@ void *worker (void *arg) {
         } else {
             node_t *x = lifo_aba_pop(stk_);
             if (x) {
-                nbd_defer_free(x);
+                rcu_defer_free(x);
             }
         }
         rcu_update();
@@ -75,7 +78,6 @@ void *worker (void *arg) {
 }
 
 int main (int argc, char **argv) {
-    nbd_init();
     //lwt_set_trace_level("m0r0");
 
     int num_threads = 2;
@@ -96,6 +98,10 @@ int main (int argc, char **argv) {
     stk_ = lifo_alloc();
     wait_ = num_threads;
 
+    struct timeval tv1, tv2;
+    gettimeofday(&tv1, NULL);
+    wait_ = num_threads;
+
     pthread_t thread[num_threads];
     for (int i = 0; i < num_threads; ++i) {
         int rc = nbd_thread_create(thread + i, i, worker, (void *)(size_t)i);
@@ -104,6 +110,11 @@ int main (int argc, char **argv) {
     for (int i = 0; i < num_threads; ++i) {
         pthread_join(thread[i], NULL);
     }
+
+    gettimeofday(&tv2, NULL);
+    int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
+    printf("Th:%d Time:%dms\n\n", num_threads, ms);
+    fflush(stdout);
 
     return 0;
 }

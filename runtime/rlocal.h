@@ -1,7 +1,8 @@
 #ifndef RLOCAL_H
 #define RLOCAL_H
+
+#include "runtime.h"
 #include "tls.h"
-DECLARE_THREAD_LOCAL(tid_, int);
 
 void mem_init (void);
 

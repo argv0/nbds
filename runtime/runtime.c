@@ -2,6 +2,8 @@
  * Written by Josh Dybnis and released to the public domain, as explained at
  * http://creativecommons.org/licenses/publicdomain
  */
+#define _POSIX_C_SOURCE 1 // for rand_r()
+#include <stdlib.h>
 #include <pthread.h>
 #include "common.h"
 #include "runtime.h"
@@ -19,7 +21,7 @@ typedef struct thread_info {
 } thread_info_t;
 
 __attribute__ ((constructor)) void nbd_init (void) {
-    sranddev();
+    //sranddev();
     INIT_THREAD_LOCAL(rand_seed_);
     INIT_THREAD_LOCAL(tid_);
     SET_THREAD_LOCAL(tid_, 0);

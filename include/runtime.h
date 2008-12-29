@@ -5,6 +5,7 @@
 #ifndef RUNTIME_H
 #define RUNTIME_H
 
+#include <pthread.h>
 #include "tls.h"
 
 extern DECLARE_THREAD_LOCAL(tid_, int);

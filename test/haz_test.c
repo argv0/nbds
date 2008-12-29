@@ -77,7 +77,7 @@ void *worker (void *arg) {
 int main (int argc, char **argv) {
     //lwt_set_trace_level("m0r0");
 
-    int num_threads = MAX_NUM_THREADS;
+    int num_threads = 2;
     if (argc == 2)
     {
         errno = 0;

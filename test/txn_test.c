@@ -26,7 +26,7 @@ void test1 (CuTest* tc) {
 
 int main (void) {
 
-    txn_init();
+    lwt_set_trace_level("x3h3");
 
     CuString *output = CuStringNew();
     CuSuite* suite = CuSuiteNew();

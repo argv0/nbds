@@ -4,6 +4,7 @@
  *
  * Extreamly fast multi-threaded malloc. 64 bit platforms only!
  */
+#define _BSD_SOURCE // so we get MAP_ANON on linux
 #include <sys/mman.h>
 #include <stdio.h>
 #include <errno.h>

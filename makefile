@@ -4,10 +4,10 @@
 ###################################################################################################
 # Makefile for building programs with whole-program interfile optimization
 ###################################################################################################
-OPT	   := -fwhole-program -combine -03 #-DNDEBUG
-CFLAGS := -g -Wall -Werror -std=c99 $(OPT) -m64 #-DLIST_USE_HAZARD_POINTER -DENABLE_TRACE #-DTEST_STRING_KEYS #-DNBD32 
+OPT	   := -O3 #-DNDEBUG #-fwhole-program -combine 
+CFLAGS := -g -Wall -Werror -std=c99 $(OPT) -lpthread #-DNBD32 -DENABLE_TRACE #-DLIST_USE_HAZARD_POINTER #-DTEST_STRING_KEYS #
 INCS   := $(addprefix -I, include)
-TESTS  := output/map_test2 output/map_test1 output/txn_test 
+TESTS  := output/map_test2 output/map_test1 output/txn_test output/rcu_test output/haz_test
 EXES   := $(TESTS)
 
 RUNTIME_SRCS := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c datatype/nstring.c runtime/hazard.c

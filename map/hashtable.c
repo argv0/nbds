@@ -95,7 +95,7 @@ static volatile entry_t *hti_lookup (hti_t *hti, map_key_t key, uint32_t key_has
             map_key_t ent_key = ent->key;
             if (ent_key == DOES_NOT_EXIST) {
                 TRACE("h1", "hti_lookup: entry %p for key %p is empty", ent, 
-                            (hti->ht->key_type == NULL) ? (void *)ent_key : GET_PTR(ent_key));
+                            (hti->ht->key_type == NULL) ? (void *)key : GET_PTR(key));
                 *is_empty = 1; // indicate an empty so the caller avoids an expensive key compare
                 return ent;
             }
@@ -233,9 +233,11 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
     // We use 0 to indicate that <key_hash> is uninitiallized. Occasionally the key's hash will really be 0 and we
     // waste time recomputing it every time. It is rare enough that it won't hurt performance. 
     if (key_hash == 0) { 
-        key_hash = (ht1->ht->key_type == NULL) 
-                 ? murmur32_8b(ht1_ent_key) 
-                 : ht1->ht->key_type->hash((void *)key);
+#ifdef NBD32
+        key_hash = (ht1->ht->key_type == NULL) ? murmur32_4b(ht1_ent_key) : ht1->ht->key_type->hash((void *)key);
+#else
+        key_hash = (ht1->ht->key_type == NULL) ? murmur32_8b(ht1_ent_key) : ht1->ht->key_type->hash((void *)key);
+#endif
     }
 
     int ht2_ent_is_empty;
@@ -442,7 +444,11 @@ static map_val_t hti_get (hti_t *hti, map_key_t key, uint32_t key_hash) {
 
 //
 map_val_t ht_get (hashtable_t *ht, map_key_t key) {
+#ifdef NBD32
+    uint32_t hash = (ht->key_type == NULL) ? murmur32_4b((uint64_t)key) : ht->key_type->hash((void *)key);
+#else
     uint32_t hash = (ht->key_type == NULL) ? murmur32_8b((uint64_t)key) : ht->key_type->hash((void *)key);
+#endif
     return hti_get(ht->hti, key, hash);
 }
 
@@ -538,7 +544,11 @@ map_val_t ht_cas (hashtable_t *ht, map_key_t key, map_val_t expected_val, map_va
     }
 
     map_val_t old_val;
+#ifdef NBD32
+    uint32_t key_hash = (ht->key_type == NULL) ? murmur32_4b((uint64_t)key) : ht->key_type->hash((void *)key);
+#else
     uint32_t key_hash = (ht->key_type == NULL) ? murmur32_8b((uint64_t)key) : ht->key_type->hash((void *)key);
+#endif
     while ((old_val = hti_cas(hti, key, key_hash, expected_val, new_val)) == COPIED_VALUE) {
         assert(hti->next);
         hti = hti->next;
@@ -552,7 +562,11 @@ map_val_t ht_cas (hashtable_t *ht, map_key_t key, map_val_t expected_val, map_va
 map_val_t ht_remove (hashtable_t *ht, map_key_t key) {
     hti_t *hti = ht->hti;
     map_val_t val;
+#ifdef NBD32
+    uint32_t key_hash = (ht->key_type == NULL) ? murmur32_4b((uint64_t)key) : ht->key_type->hash((void *)key);
+#else
     uint32_t key_hash = (ht->key_type == NULL) ? murmur32_8b((uint64_t)key) : ht->key_type->hash((void *)key);
+#endif
     do {
         val = hti_cas(hti, key, key_hash, CAS_EXPECT_WHATEVER, DOES_NOT_EXIST);
         if (val != COPIED_VALUE)
@@ -653,9 +667,12 @@ map_val_t ht_iter_next (ht_iter_t *iter, map_key_t *key_ptr) {
         *key_ptr = key;
     }
     if (val == COPIED_VALUE) {
-        uint32_t hash = (iter->hti->ht->key_type == NULL) 
-                      ? murmur32_8b((uint64_t)key)
-                      : iter->hti->ht->key_type->hash((void *)key);
+        const datatype_t *key_type = iter->hti->ht->key_type;
+#ifdef NBD32
+        uint32_t hash = (key_type == NULL) ? murmur32_4b((uint64_t)key) : key_type->hash((void *)key);
+#else
+        uint32_t hash = (key_type == NULL) ? murmur32_8b((uint64_t)key) : key_type->hash((void *)key);
+#endif
         val = hti_get(iter->hti->next, (map_key_t)ent->key, hash);
     } 
 

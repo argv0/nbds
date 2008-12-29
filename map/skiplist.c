@@ -47,15 +47,15 @@ struct sl {
 
 // Marking the <next> field of a node logically removes it from the list
 #if 0
-static inline markable_t  MARK_NODE(node_t * x) { return TAG_VALUE((markable_t)x, TAG1); }
-static inline int        HAS_MARK(markable_t x) { return (IS_TAGGED(x, TAG1) == TAG1); }
+static inline markable_t  MARK_NODE(node_t * x) { return TAG_VALUE((markable_t)x, 0x1); }
+static inline int        HAS_MARK(markable_t x) { return (IS_TAGGED(x, 0x1) == 0x1); }
 static inline node_t *   GET_NODE(markable_t x) { assert(!HAS_MARK(x)); return (node_t *)x; }
-static inline node_t * STRIP_MARK(markable_t x) { return ((node_t *)STRIP_TAG(x, TAG1)); }
+static inline node_t * STRIP_MARK(markable_t x) { return ((node_t *)STRIP_TAG(x, 0x1)); }
 #else
-#define  MARK_NODE(x) TAG_VALUE((markable_t)(x), TAG1)
-#define   HAS_MARK(x) (IS_TAGGED((x), TAG1) == TAG1)
+#define  MARK_NODE(x) TAG_VALUE((markable_t)(x), 0x1)
+#define   HAS_MARK(x) (IS_TAGGED((x), 0x1) == 0x1)
 #define   GET_NODE(x) ((node_t *)(x))
-#define STRIP_MARK(x) ((node_t *)STRIP_TAG((x), TAG1))
+#define STRIP_MARK(x) ((node_t *)STRIP_TAG((x), 0x1))
 #endif
 
 static int random_level (void) {
@@ -117,7 +117,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
     node_t *pred = sl->head;
     node_t *item = NULL;
     TRACE("s2", "find_preds: searching for key %p in skiplist (head is %p)", key, pred);
-    int d;
+    int d = 0;
     int start_level = MAX_LEVEL;
 #if MAX_LEVEL > 2
     // Optimization for small lists. No need to traverse empty higher levels.

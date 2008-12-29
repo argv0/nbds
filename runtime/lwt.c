@@ -19,8 +19,8 @@ volatile int halt_ = 0;
 typedef struct lwt_record {
     uint64_t timestamp;
     uint64_t format;
-    uint64_t value1;
-    uint64_t value2;
+    size_t value1;
+    size_t value2;
 } lwt_record_t;
 
 typedef struct lwt_buffer {
@@ -51,7 +51,7 @@ void lwt_set_trace_level (const char *flags)
     }
 }
 
-static inline void dump_record (FILE *file, int thread_id, lwt_record_t *r, uint64_t offset)
+static void dump_record (FILE *file, int thread_id, lwt_record_t *r, uint64_t offset)
 {
     // print the record if its trace category is enabled at a high enough level
     int flag  =  r->format >> 56;

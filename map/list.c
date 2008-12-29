@@ -34,13 +34,14 @@ struct ll {
 };
 
 // Marking the <next> field of a node logically removes it from the list
-#define  MARK_NODE(x) TAG_VALUE((markable_t)(x), TAG1)
-#define   HAS_MARK(x) (IS_TAGGED((x), TAG1) == TAG1)
+#define  MARK_NODE(x) TAG_VALUE((markable_t)(x), 0x1)
+#define   HAS_MARK(x) (IS_TAGGED((x), 0x1) == 0x1)
 #define   GET_NODE(x) ((node_t *)(x))
-#define STRIP_MARK(x) ((node_t *)STRIP_TAG((x), TAG1))
+#define STRIP_MARK(x) ((node_t *)STRIP_TAG((x), 0x1))
 
 static node_t *node_alloc (map_key_t key, map_val_t val) {
     node_t *item = (node_t *)nbd_malloc(sizeof(node_t));
+    assert(!HAS_MARK((size_t)item));
     item->key = key;
     item->val = val;
     return item;
