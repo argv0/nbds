@@ -65,10 +65,12 @@ void rcu_update (void) {
     }
 
     // free
-    while (pending_[tid_]->tail != rcu_[tid_][tid_]) {
-        fifo_t *q = pending_[tid_];
-        uint32_t i = MOD_SCALE(q->tail++, q->scale);
+    fifo_t *q = pending_[tid_];
+    while (q->tail != rcu_[tid_][tid_]) {
+        uint32_t i = MOD_SCALE(q->tail, q->scale);
+        TRACE("r0", "rcu_update: freeing %p from queue at position %llu", q->x[i], q->tail);
         nbd_free(q->x[i]);
+        q->tail++;
     }
 }
 
@@ -77,13 +79,14 @@ void rcu_defer_free (void *x) {
     LOCALIZE_THREAD_LOCAL(tid_, int);
     fifo_t *q = pending_[tid_];
     assert(MOD_SCALE(q->head + 1, q->scale) != MOD_SCALE(q->tail, q->scale));
-    uint32_t i = MOD_SCALE(q->head++, q->scale);
+    uint32_t i = MOD_SCALE(q->head, q->scale);
     q->x[i] = x;
-    TRACE("r0", "rcu_defer_free: put %p on queue at position %llu", x, pending_[tid_]->head);
+    TRACE("r0", "rcu_defer_free: put %p on queue at position %llu", x, q->head);
+    q->head++;
 
-    if (pending_[tid_]->head - rcu_last_posted_[tid_][tid_] < RCU_POST_THRESHOLD)
-        return;
-    TRACE("r0", "rcu_defer_free: posting %llu", pending_[tid_]->head, 0);
-    int next_thread_id = (tid_ + 1) % num_threads_;
-    rcu_[next_thread_id][tid_] = rcu_last_posted_[tid_][tid_] = pending_[tid_]->head;
+    if (pending_[tid_]->head - rcu_last_posted_[tid_][tid_] >= RCU_POST_THRESHOLD) {
+        TRACE("r0", "rcu_defer_free: posting %llu", pending_[tid_]->head, 0);
+        int next_thread_id = (tid_ + 1) % num_threads_;
+        rcu_[next_thread_id][tid_] = rcu_last_posted_[tid_][tid_] = pending_[tid_]->head;
+    }
 }

@@ -56,7 +56,7 @@ void *worker (void *arg) {
 }
 
 int main (int argc, char **argv) {
-    lwt_set_trace_level("r0m0l3");
+    lwt_set_trace_level("r0m3s3");
 
     char* program_name = argv[0];
     pthread_t thread[MAX_NUM_THREADS];
@@ -66,7 +66,7 @@ int main (int argc, char **argv) {
         return -1;
     }
 
-    num_threads_ = MAX_NUM_THREADS;
+    num_threads_ = 2;
     if (argc == 2)
     {
         errno = 0;

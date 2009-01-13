@@ -78,7 +78,7 @@ void *worker (void *arg) {
 }
 
 int main (int argc, char **argv) {
-    //lwt_set_trace_level("m0r0");
+    lwt_set_trace_level("m3r3");
 
     int num_threads = 2;
     if (argc == 2)

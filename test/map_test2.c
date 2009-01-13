@@ -316,8 +316,7 @@ void big_iteration_test (CuTest* tc) {
 }
 
 int main (void) {
-
-    lwt_set_trace_level("l3");
+    lwt_set_trace_level("r0m3s3");
 
     static const map_impl_t *map_types[] = { &ll_map_impl, &sl_map_impl, &ht_map_impl };
     for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {

@@ -40,10 +40,12 @@
 #define STRIP_TAG(v, tag) ((v) & ~tag)
 
 #define DOES_NOT_EXIST 0
-#define ERROR_INVALID_OPTION (-1)
-#define ERROR_INVALID_ARGUMENT (-2)
+#define ERROR_INVALID_OPTION      (-1)
+#define ERROR_INVALID_ARGUMENT    (-2)
 #define ERROR_UNSUPPORTED_FEATURE (-3)
-#define ERROR_TXN_NOT_RUNNING (-4)
+#define ERROR_TXN_NOT_RUNNING     (-4)
+
+#define VOLATILE(x) *((volatile typeof(x) *)&x)
 
 typedef unsigned long long uint64_t;
 typedef unsigned int       uint32_t;

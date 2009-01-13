@@ -32,7 +32,7 @@ static lifo_t *stk_;
 
 void *worker (void *arg) {
     int id = (int)(size_t)arg;
-    unsigned int r = (unsigned int)(id + 1) * 0x5bd1e995; // seed "random" number generator
+    unsigned int r = (unsigned int)(id + 1) * 0x5bd1e995; // seed psuedo-random number generator
     haz_t *hp0 = haz_get_static(0);
 
     // Wait for all the worker threads to be ready.
@@ -41,7 +41,7 @@ void *worker (void *arg) {
 
     int i;
     for (i = 0; i < NUM_ITERATIONS; ++ i) {
-        r ^= r << 6; r ^= r >> 21; r ^= r << 7; // generate next "random" number
+        r ^= r << 6; r ^= r >> 21; r ^= r << 7; // generate next psuedo-random number
         if (r & 0x1000) {
             // push
             node_t *new_head = (node_t *)nbd_malloc(sizeof(node_t));

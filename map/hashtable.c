@@ -34,6 +34,9 @@ typedef struct hti {
     volatile entry_t *table;
     hashtable_t *ht; // parent ht;
     struct hti *next;
+#ifdef USE_SYSTEM_MALLOC
+    void *unaligned_table_ptr; // system malloc doesn't guarentee cache-line alignment
+#endif
     unsigned scale;
     int max_probe;
     int ref_count;
@@ -136,13 +139,16 @@ static volatile entry_t *hti_lookup (hti_t *hti, map_key_t key, uint32_t key_has
 static hti_t *hti_alloc (hashtable_t *parent, int scale) {
     hti_t *hti = (hti_t *)nbd_malloc(sizeof(hti_t));
     memset(hti, 0, sizeof(hti_t));
+    hti->scale = scale;
 
     size_t sz = sizeof(entry_t) * (1 << scale);
-    entry_t *table = nbd_malloc(sz);
-    memset(table, 0, sz);
-    hti->table = table;
-
-    hti->scale = scale;
+#ifdef USE_SYSTEM_MALLOC
+    hti->unaligned_table_ptr = nbd_malloc(sz + CACHE_LINE_SIZE - 1);
+    hti->table = (void *)(((size_t)hti->unaligned_table_ptr + CACHE_LINE_SIZE - 1) & ~(CACHE_LINE_SIZE - 1));
+#else
+    hti->table = nbd_malloc(sz);
+#endif
+    memset((void *)hti->table, 0, sz);
 
     // When searching for a key probe a maximum of 1/4 of the buckets up to 1000 buckets.
     hti->max_probe = ((1 << (hti->scale - 2)) / ENTRIES_PER_BUCKET) + 4;
@@ -178,7 +184,11 @@ static void hti_start_copy (hti_t *hti) {
     if (old_next != NULL) {
         // Another thread beat us to it.
         TRACE("h0", "hti_start_copy: lost race to install new hti; found %p", old_next, 0);
-        nbd_free(next);
+#ifdef USE_SYSTEM_MALLOC
+        nbd_free(next->unaligned_table_ptr);
+#else
+        nbd_free((void *)next->table);
+#endif
         return;
     }
     TRACE("h0", "hti_start_copy: new hti %p scale %llu", next, next->scale);
@@ -508,7 +518,11 @@ static void hti_defer_free (hti_t *hti) {
             rcu_defer_free(GET_PTR(key));
         }
     }
+#ifdef USE_SYSTEM_MALLOC
+    rcu_defer_free(hti->unaligned_table_ptr);
+#else
     rcu_defer_free((void *)hti->table);
+#endif
     rcu_defer_free(hti);
 }
 

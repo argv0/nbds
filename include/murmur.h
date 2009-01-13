@@ -73,10 +73,8 @@ static inline uint32_t murmur32_8b (uint64_t key)
     // Initialize the hash to a 'random' value
     uint32_t h = 8;
 
-    const unsigned char *data = (const unsigned char *)&key;
-
-    uint32_t k1 = *(uint32_t *)data;
-    uint32_t k2 = *(uint32_t *)(data + 4);
+    uint32_t k1 = (uint32_t)(key >> 32);
+    uint32_t k2 = (uint32_t)key;
 
     k1 *= m; 
     k1 ^= k1 >> r; 

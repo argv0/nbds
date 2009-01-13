@@ -13,10 +13,10 @@
 #define TRACE(flag, format, v1, v2) lwt_trace(flag, format, (size_t)(v1), (size_t)(v2))
 #endif
 
-#ifdef NDEBUG
-#define ASSERT(x) 
+#ifndef NDEBUG
+#define ASSERT(x) do { if (!(x)) { lwt_halt(); assert(!#x); } } while (0)
 #else
-#define ASSERT(x) if (!(x)) { lwt_halt(); assert(!#x); }
+#define ASSERT(x) do { } while (0)
 #endif
 
 // Dump trace records to <file_name>. The file should be post-processed with "sort" before viewing.

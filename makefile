@@ -4,13 +4,15 @@
 ###################################################################################################
 # Makefile for building programs with whole-program interfile optimization
 ###################################################################################################
-OPT	   := -O3 #-DNDEBUG #-fwhole-program -combine 
-CFLAGS := -g -Wall -Werror -std=c99 $(OPT) -lpthread #-DNBD32 -DENABLE_TRACE #-DLIST_USE_HAZARD_POINTER #-DTEST_STRING_KEYS #
-INCS   := $(addprefix -I, include)
-TESTS  := output/map_test2 output/map_test1 output/txn_test output/rcu_test output/haz_test
-EXES   := $(TESTS)
+CFLAGS0 := -g -Wall -Werror -std=c99 -lpthread 
+CFLAGS1 := $(CFLAGS0) -O3 #-DNDEBUG #-DENABLE_TRACE #-fwhole-program -combine 
+CFLAGS  := $(CFLAGS1) -DUSE_SYSTEM_MALLOC #-DLIST_USE_HAZARD_POINTER #-DTEST_STRING_KEYS #-DNBD32 
+INCS    := $(addprefix -I, include)
+TESTS   := output/rcu_test output/haz_test output/map_test2 output/map_test1 output/txn_test 
+EXES    := $(TESTS)
 
-RUNTIME_SRCS := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c datatype/nstring.c runtime/hazard.c
+RUNTIME_SRCS := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c datatype/nstring.c \
+				runtime/hazard.c
 MAP_SRCS     := map/map.c map/list.c map/skiplist.c map/hashtable.c
 
 haz_test_SRCS  := $(RUNTIME_SRCS) test/haz_test.c
@@ -48,7 +50,7 @@ asm: $(addsuffix .s, $(EXES))
 
 $(addsuffix .s, $(EXES)): output/%.s : output/%.d makefile
 	gcc $(CFLAGS:-combine:) $(INCS) -MM -MT $@ $($*_SRCS) > output/$*.d
-	gcc $(CFLAGS) $(INCS) -S -o $@.temp $($*_SRCS)
+	gcc $(CFLAGS) $(INCS) -combine -S -o $@.temp $($*_SRCS)
 	grep -v "^L[BFM]\|^LCF" $@.temp > $@
 	rm $@.temp
 
