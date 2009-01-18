@@ -15,7 +15,9 @@
 typedef void (*free_t) (void *);
 typedef void *haz_t;
 
-static inline void haz_set (haz_t *haz, void *x) { *haz = x; __asm__ __volatile__("mfence"); }
+//static inline void haz_set (volatile haz_t *haz, void *x) { *haz = x; haz_t y = *haz; y = y; }
+
+static inline void haz_set (volatile haz_t *haz, void *x) { *haz = x; __asm__ __volatile__("mfence"); }
 
 haz_t *haz_get_static         (int n);
 void   haz_register_dynamic   (haz_t *haz);

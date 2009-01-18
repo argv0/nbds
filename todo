@@ -1,18 +1,7 @@
-+ fix makefile to compute dependency lists as a side-effect of compilation (-MF)
-+ support integer keys for ht
-+ optimize tracing code, still too much overhead
-+ use NULL instead of a sentinal node in skiplist and list
-+ make the interfaces for all data structures consistent 
-+ make list and skiplist use string keys
-+ optimize integer keys
-+ ht_print()
-+ iterators
-+ 32 bit x86 support
-
 memory manangement
 ------------------
-- allow threads to dynamically enter and exit rcu's token ring
-- augment rcu with heartbeat manager to kill stalled threads
+- allow threads to dynamically enter and exit rcu's token passing ring
+- augment rcu with heartbeat manager to kill and recover from stalled threads
 - make rcu try yielding when its buffer gets full
 - alternate memory reclamation schemes: hazard pointers and/or reference counting
 - seperate nbd_malloc/nbd_free into general purpose malloc/free replacement
@@ -33,7 +22,7 @@ optimization
 - shortcut from write-set to entries/nodes
 - use a shared scan for write-set validation, similar to ht copy logic
 - experiment with the performance impact of not passing the hash between functions in ht
-- experiment with embedding the keys in the list/skiplist nodes
+- experiment with embedding the nstring keys in the list/skiplist nodes
 
 features
 --------

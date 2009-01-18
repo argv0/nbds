@@ -2,7 +2,7 @@
  * Written by Josh Dybnis and released to the public domain, as explained at
  * http://creativecommons.org/licenses/publicdomain
  *
- * Extreamly fast multi-threaded malloc. 64 bit platforms only!
+ * Extreamly fast multi-threaded malloc.
  */
 #define _BSD_SOURCE // so we get MAP_ANON on linux
 #include <sys/mman.h>
@@ -13,12 +13,16 @@
 #include "lwt.h"
 
 #define GET_SCALE(n) (sizeof(void *)*__CHAR_BIT__ - __builtin_clzl((n) - 1)) // log2 of <n>, rounded up
-#define MAX_SCALE 31 // allocate blocks up to 4GB in size (arbitrary, could be bigger)
-#define REGION_SCALE 22 // 4MB regions
+#ifndef NBD32
+#define MAX_POINTER_BITS 48
+#define REGION_SCALE 21 // 2mb regions
+#else
+#define MAX_POINTER_BITS 32
+#define REGION_SCALE 12 // 4kb regions
+#endif
 #define REGION_SIZE (1 << REGION_SCALE)
-#define HEADER_REGION_SCALE 22 // 4MB is space enough for headers for over 2,000,000 regions
-#define HEADER_REGION_SIZE (1 << HEADER_REGION_SCALE)
-#define HEADER_COUNT (HEADER_REGION_SIZE / sizeof(header_t))
+#define HEADER_REGION_SCALE ((MAX_POINTER_BITS - REGION_SCALE) + GET_SCALE(sizeof(header_t)))
+#define MAX_SCALE 31 // allocate blocks up to 4GB in size (arbitrary, could be bigger)
 
 typedef struct block {
     struct block *next;
@@ -30,19 +34,18 @@ typedef struct header {
     uint8_t scale; // log2 of the block size
 } header_t;
 
-typedef struct private_list {
-    block_t *head;
-    uint32_t next_pub;
-    uint32_t count;
-} private_list_t;
+typedef struct tl {
+    block_t *free_blocks[MAX_SCALE+1];
+    block_t *blocks_from[MAX_NUM_THREADS];
+    block_t *blocks_to[MAX_NUM_THREADS];
+} __attribute__((aligned(CACHE_LINE_SIZE))) tl_t ;
 
 static header_t *headers_ = NULL;
 
-static block_t *pub_free_list_[MAX_NUM_THREADS][MAX_SCALE+1][MAX_NUM_THREADS] = {};
-static private_list_t pri_free_list_[MAX_NUM_THREADS][MAX_SCALE+1] = {};
+static tl_t tl_[MAX_NUM_THREADS] = {};
 
 static inline header_t *get_header (void *r) {
-    return headers_ + (((size_t)r >> REGION_SCALE) & (HEADER_COUNT - 1));
+    return headers_ + ((size_t)r >> REGION_SCALE);
 }
 
 static void *get_new_region (int block_scale) {
@@ -51,10 +54,32 @@ static void *get_new_region (int block_scale) {
         sz = REGION_SIZE;
     }
     void *region = mmap(NULL, sz, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
-    TRACE("m1", "get_new_region: mmap new region %p (size %p)", region, sz);
+    TRACE("m1", "get_new_region: mmapped new region %p (size %p)", region, sz);
     if (region == (void *)-1) {
         perror("get_new_region: mmap");
         exit(-1);
+    }
+    if ((size_t)region & (sz - 1)) {
+        TRACE("m0", "get_new_region: region not aligned", 0, 0);
+        munmap(region, sz);
+        region = mmap(NULL, sz * 2, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
+        if (region == (void *)-1) {
+            perror("get_new_region: mmap");
+            exit(-1);
+        }
+        TRACE("m0", "get_new_region: mmapped new region %p (size %p)", region, sz * 2);
+        void *aligned = (void *)(((size_t)region + sz) & ~(sz - 1));
+        size_t extra = (char *)aligned - (char *)region;
+        if (extra) {
+            munmap(region, extra);
+            TRACE("m0", "get_new_region: unmapped extra memory %p (size %p)", region, extra);
+        }
+        extra = ((char *)region + sz) - (char *)aligned;
+        if (extra) {
+            munmap((char *)aligned + sz, extra);
+            TRACE("m0", "get_new_region: unmapped extra memory %p (size %p)", (char *)aligned + sz, extra);
+        }
+        region = aligned;
     }
     assert(region);
     if (headers_ != NULL) {
@@ -70,24 +95,27 @@ static void *get_new_region (int block_scale) {
     return region;
 }
 
-void mem_init (void) {
+__attribute__ ((constructor(101))) void mem_init (void) {
 #ifdef USE_SYSTEM_MALLOC
     return;
 #endif
     assert(headers_ == NULL);
-    headers_ = (header_t *)get_new_region(HEADER_REGION_SCALE);
+    // Allocate a region for the region headers. This could be a big chunk of memory (256MB) on 64 bit systems,
+    // but it just takes up virtual address space. Physical address space used by the headers is still proportional
+    // to the amount of memory we alloc.
+    headers_ = (header_t *)get_new_region(HEADER_REGION_SCALE); 
     TRACE("m1", "mem_init: header region %p", headers_, 0);
-    memset(headers_, 0, HEADER_REGION_SIZE);
+    memset(headers_, 0, (1 << HEADER_REGION_SCALE));
 }
 
 // Put <x> onto its owner's public free list (in the appropriate size bin).
 //
-// TODO: maybe we want to munmap() larger size blocks to reclaim virtual address space?
+// TODO: maybe we want to munmap() larger size blocks?
 void nbd_free (void *x) {
 #ifdef USE_SYSTEM_MALLOC
     TRACE("m1", "nbd_free: %p", x, 0);
 #ifndef NDEBUG
-    memset(x, 0xcd, sizeof(void *)); // bear trap
+    //memset(x, 0xcd, sizeof(void *)); // bear trap
 #endif//NDEBUG
     free(x);
     return;
@@ -103,15 +131,21 @@ void nbd_free (void *x) {
 #ifndef NDEBUG
     memset(b, 0xcd, (1 << h->scale)); // bear trap
 #endif
+    tl_t *tl = &tl_[tid_]; // thread-local data
     if (h->owner == tid_) {
-        TRACE("m1", "nbd_free: private block, old free list head %p", pri_free_list_[tid_][h->scale].head, 0);
-        b->next = pri_free_list_[tid_][h->scale].head;
-        pri_free_list_[tid_][h->scale].head = b;
+        TRACE("m1", "nbd_free: private block, old free list head %p", tl->free_blocks[h->scale], 0);
+        b->next = tl->free_blocks[h->scale];
+        tl->free_blocks[h->scale] = b;
     } else {
-        TRACE("m1", "nbd_free: owner %llu free list head %p", h->owner, pub_free_list_[h->owner][h->scale][tid_]);
-        do {
-            b->next = pub_free_list_[h->owner][h->scale][tid_];
-        } while (SYNC_CAS(&pub_free_list_[h->owner][h->scale][tid_], b->next, b) != b->next);
+        TRACE("m1", "nbd_free: owner %llu", h->owner, 0);
+        // push <b> onto it's owner's queue
+        VOLATILE(b->next) = NULL;
+        if (EXPECT_FALSE(tl->blocks_to[h->owner] == NULL)) {
+            VOLATILE(tl_[h->owner].blocks_from[tid_]) = b;
+        } else {
+            VOLATILE(tl->blocks_to[h->owner]->next) = b;
+        }
+        tl->blocks_to[h->owner] = b;
     }
 }
 
@@ -139,54 +173,46 @@ void *nbd_malloc (size_t n) {
     assert(b_scale <= MAX_SCALE);
     TRACE("m1", "nbd_malloc: request size %llu (scale %llu)", n, b_scale);
     LOCALIZE_THREAD_LOCAL(tid_, int);
-    private_list_t *pri = &pri_free_list_[tid_][b_scale]; // our private free list
+    tl_t *tl = &tl_[tid_]; // thread-local data
 
     // If our private free list is empty, try to find blocks on our public free list. If that fails,
     // allocate a new region.
-    if (EXPECT_FALSE(pri->head == NULL)) {
-        block_t **pubs = pub_free_list_[tid_][b_scale]; // our public free lists
-        while (1) {
-            // look for blocks on our public free lists round robin
-            pri->next_pub = (pri->next_pub+1) & (MAX_NUM_THREADS-1);
-
-            TRACE("m1", "nbd_malloc: searching public free list %llu", pri->next_pub, 0);
-            if (pri->next_pub == tid_) {
-                uint32_t count = pri->count;
-                pri->count = 0;
-                // If we haven't gotten at least half a region's worth of block's from our public lists
-                // we allocate a new region. This guarentees that we amortize the cost of accessing our
-                // public lists accross enough nbd_malloc() calls.
-                uint32_t min_count = b_scale > REGION_SCALE ? 1 << (b_scale-REGION_SCALE-1) : 1;
-                if (count < min_count) {
-                    char  *region = get_new_region(b_scale);
-                    size_t b_size = 1 << b_scale;
-                    size_t region_size = (b_size < REGION_SIZE) ? REGION_SIZE : b_size;
-                    for (int i = region_size; i != 0; i -= b_size) {
-                        block_t *b = (block_t *)(region + i - b_size);
-                        b->next = pri->head;
-                        pri->head = b;
-                    }
-                    pri->count = 0;
-                    break;
+    if (EXPECT_FALSE(tl->free_blocks[b_scale] == NULL)) {
+        for (int i = 0; i < MAX_NUM_THREADS; ++ i) {
+            block_t *x = tl->blocks_from[i];
+            if (x != NULL) {
+                block_t *next = x->next;
+                if (next != NULL) {
+                    do {
+                        header_t *h = get_header(x);
+                        x->next = tl->free_blocks[h->scale];
+                        tl->free_blocks[h->scale] = x;
+                        x = next;
+                        next = x->next;
+                    } while (next != NULL);
+                    tl->blocks_from[i] = x;
                 }
-            } else if (pubs[pri->next_pub] != NULL) {
-                block_t *stolen = SYNC_SWAP(&pubs[pri->next_pub], NULL);
-                TRACE("m1", "nbd_malloc: stole list %p", stolen, 0);
-                if (stolen == NULL)
-                    continue;
-                pri->head = stolen;
-                break;
             }
         }
-        assert(pri->head);
+        // allocate a new region
+        if (tl->free_blocks[b_scale] == NULL) {
+            char  *region = get_new_region(b_scale);
+            size_t b_size = 1 << b_scale;
+            size_t region_size = (b_size < REGION_SIZE) ? REGION_SIZE : b_size;
+            for (int i = region_size; i != 0; i -= b_size) {
+                block_t *b = (block_t *)(region + i - b_size);
+                b->next = tl->free_blocks[b_scale];
+                tl->free_blocks[b_scale] = b;
+            }
+        }
+        assert(tl->free_blocks[b_scale] != NULL);
     }
 
     // Pull a block off of our private free list.
-    block_t *b = pri->head;
+    block_t *b = tl->free_blocks[b_scale];
     TRACE("m1", "nbd_malloc: returning block %p (region %p) from private list", b, (size_t)b & ~MASK(REGION_SCALE));
-    assert(b);
+    ASSERT(b);
     ASSERT(get_header(b)->scale == b_scale);
-    pri->head = b->next;
-    pri->count++;
+    tl->free_blocks[b_scale] = b->next;
     return b;
 }

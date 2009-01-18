@@ -13,6 +13,7 @@
 #include "tls.h"
 #include "runtime.h"
 #include "hazard.h"
+#include "lwt.h"
 
 typedef struct pending {
     void * ptr; 
@@ -35,18 +36,23 @@ typedef struct haz_local {
 static haz_local_t haz_local_[MAX_NUM_THREADS] = {};
 
 static void sort_hazards (haz_t *hazards, int n) {
+    TRACE("H3", "sort_hazards: sorting hazard list %p of %p elements", hazards, n);
     return;
 }
 
 static int search_hazards (void *p, haz_t *hazards, int n) {
+    TRACE("H4", "search_hazards: searching list %p for hazard %p", hazards, p);
     for (int i = 0; i < n; ++i) {
-        if (hazards[i] == p) 
+        if (hazards[i] == p) {
+            TRACE("H2", "haz_search_hazards: found hazard %p", p, 0);
             return TRUE;
+        }
     }
     return FALSE;
 }
 
 static void resize_pending (void) {
+    TRACE("H2", "haz_resize_pending", 0, 0);
     LOCALIZE_THREAD_LOCAL(tid_, int);
     haz_local_t *l = haz_local_ + tid_;
     pending_t *p = nbd_malloc(sizeof(pending_t) * l->pending_size * 2);
@@ -57,6 +63,7 @@ static void resize_pending (void) {
 }
 
 void haz_defer_free (void *d, free_t f) {
+    TRACE("H1", "haz_defer_free: %p (%p)", d, f);
     assert(d);
     assert(f);
     LOCALIZE_THREAD_LOCAL(tid_, int);
@@ -121,14 +128,18 @@ void haz_defer_free (void *d, free_t f) {
 }
 
 haz_t *haz_get_static (int i) {
+    TRACE("H1", "haz_get_static: %p", i, 0);
     if (i >= STATIC_HAZ_PER_THREAD)
         return NULL;
     LOCALIZE_THREAD_LOCAL(tid_, int);
     assert(i < STATIC_HAZ_PER_THREAD);
-    return &haz_local_[tid_].static_haz[i];
+    haz_t *ret = &haz_local_[tid_].static_haz[i];
+    TRACE("H1", "haz_get_static: returning %p", ret, 0);
+    return ret;
 }
 
 void haz_register_dynamic (haz_t *haz) {
+    TRACE("H1", "haz_register_dynamic: %p", haz, 0);
     LOCALIZE_THREAD_LOCAL(tid_, int);
     haz_local_t *l = haz_local_ + tid_;
 
@@ -151,6 +162,7 @@ void haz_register_dynamic (haz_t *haz) {
 
 // assumes <haz> was registered in the same thread
 void haz_unregister_dynamic (void **haz) {
+    TRACE("H1", "haz_unregister_dynamic: %p", haz, 0);
     LOCALIZE_THREAD_LOCAL(tid_, int);
     haz_local_t *l = haz_local_ + tid_;
 

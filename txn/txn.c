@@ -46,7 +46,7 @@ static version_t version_ = 1;
 
 static skiplist_t *active_ = NULL;
 
-__attribute__ ((constructor)) void txn_init (void) {
+__attribute__ ((constructor(103))) void txn_init (void) {
     active_ = sl_alloc(NULL);
 }
 
