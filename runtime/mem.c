@@ -95,7 +95,7 @@ static void *get_new_region (int block_scale) {
     return region;
 }
 
-__attribute__ ((constructor(101))) void mem_init (void) {
+void mem_init (void) {
 #ifdef USE_SYSTEM_MALLOC
     return;
 #endif

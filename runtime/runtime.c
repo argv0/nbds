@@ -20,11 +20,12 @@ typedef struct thread_info {
     void *restrict arg;
 } thread_info_t;
 
-__attribute__ ((constructor(102))) void nbd_init (void) {
+__attribute__ ((constructor)) void nbd_init (void) {
     //sranddev();
     INIT_THREAD_LOCAL(rand_seed_);
     INIT_THREAD_LOCAL(tid_);
     SET_THREAD_LOCAL(tid_, 0);
+    mem_init();
     lwt_thread_init(0);
     rcu_thread_init(0);
 }

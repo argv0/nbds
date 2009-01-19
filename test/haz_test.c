@@ -36,7 +36,7 @@ void *worker (void *arg) {
     haz_t *hp0 = haz_get_static(0);
 
     // Wait for all the worker threads to be ready.
-    __sync_fetch_and_add(&wait_, -1);
+    (void)__sync_fetch_and_add(&wait_, -1);
     do {} while (wait_); 
 
     int i;

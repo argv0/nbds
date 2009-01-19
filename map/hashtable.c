@@ -288,8 +288,8 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
     // Update the count if we were the one that completed the copy.
     if (old_ht2_ent_val == DOES_NOT_EXIST) {
         TRACE("h0", "hti_copy_entry: key %p value %p copied to new entry", key, ht1_ent_val);
-        SYNC_ADD(&ht1->count, -1);
-        SYNC_ADD(&ht2->count, 1);
+        (void)SYNC_ADD(&ht1->count, -1);
+        (void)SYNC_ADD(&ht2->count, 1);
         return TRUE;
     }
 
@@ -376,7 +376,7 @@ static map_val_t hti_cas (hti_t *hti, map_key_t key, uint32_t key_hash, map_val_
         if (ent_val != COPIED_VALUE && ent_val != TAG_VALUE(TOMBSTONE, TAG1)) {
             int did_copy = hti_copy_entry(hti, ent, key_hash, ((volatile hti_t *)hti)->next);
             if (did_copy) {
-                SYNC_ADD(&hti->num_entries_copied, 1);
+                (void)SYNC_ADD(&hti->num_entries_copied, 1);
             }
             TRACE("h0", "hti_cas: value in the middle of a copy, copy completed by %s", 
                         (did_copy ? "self" : "other"), 0);
@@ -410,9 +410,9 @@ static map_val_t hti_cas (hti_t *hti, map_key_t key, uint32_t key_hash, map_val_
 
     // The set succeeded. Adjust the value count.
     if (old_existed && new == DOES_NOT_EXIST) {
-        SYNC_ADD(&hti->count, -1);
+        (void)SYNC_ADD(&hti->count, -1);
     } else if (!old_existed && new != DOES_NOT_EXIST) {
-        SYNC_ADD(&hti->count, 1);
+        (void)SYNC_ADD(&hti->count, 1);
     }
 
     // Return the previous value.
@@ -443,7 +443,7 @@ static map_val_t hti_get (hti_t *hti, map_key_t key, uint32_t key_hash) {
         if (EXPECT_FALSE(ent_val != COPIED_VALUE && ent_val != TAG_VALUE(TOMBSTONE, TAG1))) {
             int did_copy = hti_copy_entry(hti, ent, key_hash, ((volatile hti_t *)hti)->next);
             if (did_copy) {
-                SYNC_ADD(&hti->num_entries_copied, 1);
+                (void)SYNC_ADD(&hti->num_entries_copied, 1);
             }
         }
         return hti_get(((volatile hti_t *)hti)->next, key, key_hash); // tail-call

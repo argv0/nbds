@@ -138,7 +138,7 @@ void *add_remove_worker (void *arg) {
     int d = wd->id;
     int iters = 10000;
 
-    SYNC_ADD(wd->wait, -1);
+    (void)SYNC_ADD(wd->wait, -1);
     do { } while (*wd->wait); // wait for all workers to be ready
 
     map_key_t key;

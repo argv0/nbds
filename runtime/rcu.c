@@ -43,7 +43,7 @@ void rcu_thread_init (int id) {
     assert(id < MAX_NUM_THREADS);
     if (pending_[id] == NULL) {
         pending_[id] = fifo_alloc(RCU_QUEUE_SCALE);
-        SYNC_ADD(&num_threads_, 1);
+        (void)SYNC_ADD(&num_threads_, 1);
     }
 }
 

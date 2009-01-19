@@ -42,12 +42,13 @@ struct txn {
 
 static txn_state_e txn_validate (txn_t *txn);
 
-static version_t version_ = 1;
-
 static skiplist_t *active_ = NULL;
 
-__attribute__ ((constructor(103))) void txn_init (void) {
-    active_ = sl_alloc(NULL);
+static version_t version_ = 1;
+
+static inline skiplist_t *get_active (void) {
+
+    return active_;
 }
 
 // Validate the updates for <key>. Validation fails if there is a write-write conflict. That is if after our
@@ -124,7 +125,7 @@ static txn_state_e txn_validate (txn_t *txn) {
         case TXN_VALIDATING:
             if (txn->wv == UNDETERMINED_VERSION) {
                 version_t wv = SYNC_ADD(&version_, 1);
-                SYNC_CAS(&txn->wv, UNDETERMINED_VERSION, wv);
+                (void)SYNC_CAS(&txn->wv, UNDETERMINED_VERSION, wv);
             }
 
             for (i = 0; i < txn->writes_count; ++i) {
@@ -168,6 +169,12 @@ txn_t *txn_begin (map_t *map) {
     txn->map = map;
     txn->writes = nbd_malloc(sizeof(*txn->writes) * INITIAL_WRITES_SIZE);
     txn->writes_size = INITIAL_WRITES_SIZE;
+    if (EXPECT_FALSE(active_ == NULL)) {
+        skiplist_t *a = sl_alloc(NULL);
+        if (SYNC_CAS(&active_, NULL, a) != NULL) {
+            sl_free(a);
+        }
+    }
 
     // acquire the read version for txn. must be careful to avoid a race
     do {

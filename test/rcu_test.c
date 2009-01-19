@@ -57,7 +57,7 @@ void *worker (void *arg) {
     unsigned int rand_seed = (unsigned int)id + 1;
 
     // Wait for all the worker threads to be ready.
-    __sync_fetch_and_add(&wait_, -1);
+    (void)__sync_fetch_and_add(&wait_, -1);
     do {} while (wait_); 
 
     int i;

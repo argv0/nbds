@@ -23,7 +23,7 @@ static map_t *map_;
 void *worker (void *arg) {
 
     // Wait for all the worker threads to be ready.
-    SYNC_ADD(&wait_, -1);
+    (void)SYNC_ADD(&wait_, -1);
     do {} while (wait_); 
 
 #ifdef TEST_STRING_KEYS
