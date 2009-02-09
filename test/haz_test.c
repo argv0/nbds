@@ -36,7 +36,7 @@ void *worker (void *arg) {
     haz_t *hp0 = haz_get_static(0);
 
     // Wait for all the worker threads to be ready.
-    (void)__sync_fetch_and_add(&wait_, -1);
+    (void)SYNC_ADD(&wait_, -1);
     do {} while (wait_); 
 
     int i;
@@ -50,7 +50,7 @@ void *worker (void *arg) {
             do {
                 temp = old_head;
                 new_head->next = temp;
-            } while ((old_head = __sync_val_compare_and_swap(&stk_->head, temp, new_head)) != temp);
+            } while ((old_head = SYNC_CAS(&stk_->head, temp, new_head)) != temp);
         } else {
             // pop
             node_t *temp;
@@ -60,10 +60,10 @@ void *worker (void *arg) {
                 if (temp == NULL)
                     break;
                 haz_set(hp0, temp);
-                head = ((volatile lifo_t *)stk_)->head;
+                head = VOLATILE_DEREF(stk_).head;
                 if (temp != head)
                     continue;
-            } while ((head = __sync_val_compare_and_swap(&stk_->head, temp, temp->next)) != temp);
+            } while ((head = SYNC_CAS(&stk_->head, temp, temp->next)) != temp);
 
             if (temp != NULL) {
                 haz_defer_free(temp, nbd_free);

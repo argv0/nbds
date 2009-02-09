@@ -36,7 +36,7 @@ struct txn {
     write_rec_t *writes;
     size_t writes_size;
     size_t writes_count;
-    size_t writes_scan;
+    size_t validate_scan;
     txn_state_e state;
 };
 
@@ -45,11 +45,6 @@ static txn_state_e txn_validate (txn_t *txn);
 static skiplist_t *active_ = NULL;
 
 static version_t version_ = 1;
-
-static inline skiplist_t *get_active (void) {
-
-    return active_;
-}
 
 // Validate the updates for <key>. Validation fails if there is a write-write conflict. That is if after our
 // read version another transaction committed a change to an entry we are also trying to change.
@@ -119,7 +114,6 @@ static txn_state_e validate_key (txn_t *txn, map_key_t key) {
 
 static txn_state_e txn_validate (txn_t *txn) {
     assert(txn->state != TXN_RUNNING);
-    int i;
     switch (txn->state) {
 
         case TXN_VALIDATING:
@@ -128,7 +122,7 @@ static txn_state_e txn_validate (txn_t *txn) {
                 (void)SYNC_CAS(&txn->wv, UNDETERMINED_VERSION, wv);
             }
 
-            for (i = 0; i < txn->writes_count; ++i) {
+            for (int i = 0; i < txn->writes_count; ++i) {
                 txn_state_e s = validate_key(txn, txn->writes[i].key);
                 if (s == TXN_ABORTED) {
                     txn->state = TXN_ABORTED;
@@ -334,7 +328,6 @@ map_val_t txn_map_get (txn_t *txn, map_key_t key) {
     map_val_t value = update->value;
     TRACE("x1", "txn_map_get: key found returning value %p", value, 0);
 
-    return value;
     // collect some garbage
     version_t min_active_version = UNDETERMINED_VERSION;
     update_t *next_update = NULL;

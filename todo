@@ -1,29 +1,30 @@
-memory manangement
+memory reclamation
 ------------------
 - allow threads to dynamically enter and exit rcu's token passing ring
 - augment rcu with heartbeat manager to kill and recover from stalled threads
 - make rcu try yielding when its buffer gets full
-- alternate memory reclamation schemes: hazard pointers and/or reference counting
-- seperate nbd_malloc/nbd_free into general purpose malloc/free replacement
+- use alternate memory reclamation schemes: hazard pointers and/or reference counting
 
 quality
 -------
-- verify the key memory management in list, skiplist, and hashtable
+- verify the memory management of keys in list, skiplist, and hashtable
 - transaction tests
 - port perf tests from lib-high-scale
 - characterize the performance of hashtable vs. skiplist vs. list
 - validate function arguments in interface functions
-- document usage of the library
+- document usage
 - document algorithms
 
 optimization
 ------------
 - investigate 16 byte CAS; ht can store GUIDs inline instead of pointers to actual keys 
-- shortcut from write-set to entries/nodes
-- use a shared scan for write-set validation, similar to ht copy logic
+- write after write can just update the old update record instead of pushing a new one
+- use a shared scan for write-set validation in txn, similar to ht copy logic
 - experiment with the performance impact of not passing the hash between functions in ht
 - experiment with embedding the nstring keys in the list/skiplist nodes
 
 features
 --------
 - allow values of 0 to be inserted into maps (change DOES_NOT_EXIST to something other than 0)
+- read-committed type transactions
+- recycle free regions across size-classes and between threads

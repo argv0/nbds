@@ -374,7 +374,7 @@ static map_val_t hti_cas (hti_t *hti, map_key_t key, uint32_t key_hash, map_val_
     map_val_t ent_val = ent->val;
     if (EXPECT_FALSE(IS_TAGGED(ent_val, TAG1))) {
         if (ent_val != COPIED_VALUE && ent_val != TAG_VALUE(TOMBSTONE, TAG1)) {
-            int did_copy = hti_copy_entry(hti, ent, key_hash, ((volatile hti_t *)hti)->next);
+            int did_copy = hti_copy_entry(hti, ent, key_hash, VOLATILE_DEREF(hti).next);
             if (did_copy) {
                 (void)SYNC_ADD(&hti->num_entries_copied, 1);
             }
@@ -429,7 +429,7 @@ static map_val_t hti_get (hti_t *hti, map_key_t key, uint32_t key_hash) {
     // searching the table. In that case, if a copy is in progress the key 
     // might exist in the copy.
     if (EXPECT_FALSE(ent == NULL)) {
-        if (((volatile hti_t *)hti)->next != NULL)
+        if (VOLATILE_DEREF(hti).next != NULL)
             return hti_get(hti->next, key, key_hash); // recursive tail-call
         return DOES_NOT_EXIST;
     }
@@ -441,12 +441,12 @@ static map_val_t hti_get (hti_t *hti, map_key_t key, uint32_t key_hash) {
     map_val_t ent_val = ent->val;
     if (EXPECT_FALSE(IS_TAGGED(ent_val, TAG1))) {
         if (EXPECT_FALSE(ent_val != COPIED_VALUE && ent_val != TAG_VALUE(TOMBSTONE, TAG1))) {
-            int did_copy = hti_copy_entry(hti, ent, key_hash, ((volatile hti_t *)hti)->next);
+            int did_copy = hti_copy_entry(hti, ent, key_hash, VOLATILE_DEREF(hti).next);
             if (did_copy) {
                 (void)SYNC_ADD(&hti->num_entries_copied, 1);
             }
         }
-        return hti_get(((volatile hti_t *)hti)->next, key, key_hash); // tail-call
+        return hti_get(VOLATILE_DEREF(hti).next, key, key_hash); // tail-call
     }
 
     return (ent_val == TOMBSTONE) ? DOES_NOT_EXIST : ent_val;

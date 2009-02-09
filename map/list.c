@@ -298,7 +298,7 @@ map_val_t ll_remove (list_t *ll, map_key_t key) {
         }
     } while (next != old_next);
     TRACE("l2", "ll_remove: logically removed item %p", item, 0);
-    ASSERT(HAS_MARK(((volatile node_t *)item)->next));
+    ASSERT(HAS_MARK(VOLATILE_DEREF(item).next));
 
     // Atomically swap out the item's value in case another thread is updating the item while we are 
     // removing it. This establishes which operation occurs first logically, the update or the remove. 
@@ -377,7 +377,7 @@ map_val_t ll_iter_next (ll_iter_t *iter, map_key_t *key_ptr) {
         do {
             item = iter->pred->next;
             haz_set(hp0, STRIP_MARK(item));
-        } while (item != ((volatile node_t *)iter->pred)->next);
+        } while (item != VOLATILE_DEREF(iter->pred).next);
 #endif//LIST_USE_HAZARD_POINTER
         iter->pred = STRIP_MARK(item);
         if (iter->pred == NULL)

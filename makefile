@@ -5,13 +5,14 @@
 # Makefile for building programs with whole-program interfile optimization
 ###################################################################################################
 CFLAGS0 := -Wall -Werror -std=gnu99 -lpthread #-m32 -DNBD32 
-CFLAGS1 := $(CFLAGS0) -g -O3 #-DNDEBUG #-fwhole-program -combine 
+CFLAGS1 := $(CFLAGS0) -g #-O3 #-DNDEBUG #-fwhole-program -combine 
 CFLAGS2 := $(CFLAGS1) #-DENABLE_TRACE 
 CFLAGS3 := $(CFLAGS2) #-DLIST_USE_HAZARD_POINTER 
 CFLAGS  := $(CFLAGS3) #-DUSE_SYSTEM_MALLOC #-DTEST_STRING_KEYS 
 INCS    := $(addprefix -I, include)
-TESTS   := output/map_test2 output/map_test1 output/txn_test output/rcu_test output/haz_test 
-EXES    := $(TESTS)
+TESTS   := output/perf_test output/map_test2 output/map_test1 output/txn_test \
+           output/rcu_test  output/haz_test
+OBJS    := $(TESTS)
 
 RUNTIME_SRCS := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c datatype/nstring.c \
 				runtime/hazard.c
@@ -22,6 +23,7 @@ rcu_test_SRCS  := $(RUNTIME_SRCS) test/rcu_test.c
 txn_test_SRCS  := $(RUNTIME_SRCS) $(MAP_SRCS) test/txn_test.c test/CuTest.c txn/txn.c
 map_test1_SRCS := $(RUNTIME_SRCS) $(MAP_SRCS) test/map_test1.c 
 map_test2_SRCS := $(RUNTIME_SRCS) $(MAP_SRCS) test/map_test2.c test/CuTest.c
+perf_test_SRCS := $(RUNTIME_SRCS) $(MAP_SRCS) test/perf_test.c
 
 tests: $(TESTS)
 
@@ -44,13 +46,13 @@ $(addsuffix .log, $(TESTS)) : %.log : %
 #       Also, when calculating dependencies -combine is removed from CFLAGS because of another bug 
 # 		in gcc. It chokes when -MM is used with -combine.
 ###################################################################################################
-$(EXES): output/% : output/%.d makefile
+$(OBJS): output/% : output/%.d makefile
 	gcc $(CFLAGS:-combine:) $(INCS) -MM -MT $@ $($*_SRCS) > $@.d
 	gcc $(CFLAGS) $(INCS) -o $@ $($*_SRCS)
 
-asm: $(addsuffix .s, $(EXES))
+asm: $(addsuffix .s, $(OBJS))
 
-$(addsuffix .s, $(EXES)): output/%.s : output/%.d makefile
+$(addsuffix .s, $(OBJS)): output/%.s : output/%.d makefile
 	gcc $(CFLAGS:-combine:) $(INCS) -MM -MT $@ $($*_SRCS) > output/$*.d
 	gcc $(CFLAGS) $(INCS) -combine -S -o $@.temp $($*_SRCS)
 	grep -v "^L[BFM]\|^LCF" $@.temp > $@
@@ -71,8 +73,8 @@ clean:
 ###################################################################################################
 # dummy rule for boostrapping dependency files
 ###################################################################################################
-$(addsuffix .d, $(EXES)) : output/%.d :
+$(addsuffix .d, $(OBJS)) : output/%.d :
 
--include $(addsuffix .d, $(EXES))
+-include $(addsuffix .d, $(OBJS))
 
 .PHONY: clean test tags asm

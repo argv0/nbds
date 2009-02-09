@@ -11,12 +11,13 @@
 #include <string.h>
 #include <sys/types.h>
 
-#define MAX_NUM_THREADS 4 // make this whatever you want, but make it a power of 2
+#define MAX_NUM_THREADS  4 // make this whatever you want, but make it a power of 2
 
-#define CACHE_LINE_SIZE 64
+#define CACHE_LINE_SIZE  64 // 64 byte cache line on x86 and x86-64
+#define CACHE_LINE_SCALE 6  // log base 2 of the cache line size
 
-#define EXPECT_TRUE(x)     __builtin_expect(x, 1)
-#define EXPECT_FALSE(x)    __builtin_expect(x, 0)
+#define EXPECT_TRUE(x)     __builtin_expect(!!(x), 1)
+#define EXPECT_FALSE(x)    __builtin_expect(!!(x), 0)
 
 #define SYNC_SWAP          __sync_lock_test_and_set
 #define SYNC_CAS           __sync_val_compare_and_swap
@@ -45,13 +46,19 @@
 #define ERROR_UNSUPPORTED_FEATURE (-3)
 #define ERROR_TXN_NOT_RUNNING     (-4)
 
-#define VOLATILE(x) *((volatile typeof(x) *)&x)
+#define VOLATILE_DEREF(x) (*((volatile typeof(x))(x)))
 
 typedef unsigned long long uint64_t;
 typedef unsigned int       uint32_t;
 typedef unsigned char      uint8_t;
 
 typedef size_t markable_t;
+
+static inline uint64_t rdtsc (void) {
+    unsigned l, u;
+    __asm__ __volatile__("rdtsc" : "=a" (l), "=d" (u));
+    return ((uint64_t)u << 32) | l;
+}
 
 #include "lwt.h"
 #endif //COMMON_H

@@ -30,18 +30,18 @@ static lifo_t *lifo_alloc (void) {
 static void lifo_aba_push (lifo_t *stk, node_t *x) {
     node_t *head;
     do {
-        head = ((volatile lifo_t *)stk)->head;
-        ((volatile node_t *)x)->next = head;
-    } while (__sync_val_compare_and_swap(&stk->head, head, x) != head);
+        head = VOLATILE_DEREF(stk).head;
+        VOLATILE_DEREF(x).next = head;
+    } while (SYNC_CAS(&stk->head, head, x) != head);
 }
 
 node_t *lifo_aba_pop (lifo_t *stk) {
     node_t *head;
     do {
-        head = ((volatile lifo_t *)stk)->head;
+        head = VOLATILE_DEREF(stk).head;
         if (head == NULL)
             return NULL;
-    } while (__sync_val_compare_and_swap(&stk->head, head, head->next) != head);
+    } while (SYNC_CAS(&stk->head, head, head->next) != head);
     head->next = NULL;
     return head;
 }

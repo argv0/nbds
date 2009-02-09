@@ -10,7 +10,7 @@
 #define ASSERT_EQUAL(x, y) CuAssertIntEquals(tc, x, y)
 
 void test1 (CuTest* tc) {
-    map_t *map = map_alloc(&ht_map_impl, NULL);
+    map_t *map = map_alloc(&MAP_IMPL_HT, NULL);
     txn_t *t1 = txn_begin(map);
     txn_t *t2 = txn_begin(map);
     map_key_t k1 = (map_key_t)1;

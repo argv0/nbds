@@ -34,7 +34,11 @@ static void *worker (void *arg) {
     thread_info_t *ti = (thread_info_t *)arg;
     SET_THREAD_LOCAL(tid_, ti->thread_id);
     LOCALIZE_THREAD_LOCAL(tid_, int);
+#ifndef NDEBUG
     SET_THREAD_LOCAL(rand_seed_, tid_+1);
+#else
+    SET_THREAD_LOCAL(rand_seed_, nbd_rand_seed(tid_+1));
+#endif
     lwt_thread_init(ti->thread_id);
     rcu_thread_init(ti->thread_id);
     void *ret = ti->start_routine(ti->arg);
@@ -55,4 +59,14 @@ int nbd_rand (void) {
     unsigned r = rand_r(&rand_seed_);
     SET_THREAD_LOCAL(rand_seed_, r);
     return r;
+}
+
+uint64_t nbd_rand_seed (int i) {
+    return rdtsc() + -715159705 + i * 129;
+}
+
+// Fairly fast random numbers
+int nbd_next_rand (uint64_t *r) {
+    *r = (*r * 0x5DEECE66DLL + 0xBLL) & MASK(48);
+    return (*r >> 17) & 0x7FFFFFFF;
 }
