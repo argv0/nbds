@@ -89,7 +89,7 @@ static void *get_new_region (int block_scale) {
     if (region_size < PAGE_SIZE) {
         region_size = PAGE_SIZE;
     }
-    void *region = mmap(NULL, region_size, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
+    void *region = mmap(NULL, region_size, PROT_READ|PROT_WRITE, MAP_NORESERVE|MAP_ANON|MAP_PRIVATE, -1, 0);
     TRACE("m1", "get_new_region: mmapped new region %p (size %p)", region, region_size);
     if (region == (void *)-1) {
         perror("get_new_region: mmap");
@@ -133,9 +133,8 @@ void mem_init (void) {
     // Allocate space for the page headers. This could be a big chunk of memory on 64 bit systems,
     // but it just takes up virtual address space. Physical space used by the headers is still 
     // proportional to the amount of memory the user mallocs.
-    headers_ = (header_t *)malloc(HEADERS_SIZE); 
+    headers_ = mmap(NULL, HEADERS_SIZE, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
     TRACE("m1", "mem_init: header page %p", headers_, 0);
-    memset(headers_, 0, HEADERS_SIZE);
 
     // initialize spsc queues
     for (int i = 0; i < MAX_NUM_THREADS; ++i) {

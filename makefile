@@ -4,7 +4,7 @@
 ###################################################################################################
 # Makefile for building programs with whole-program interfile optimization
 ###################################################################################################
-CFLAGS0 := -Wall -Werror -std=gnu99 -lpthread #-m32 -DNBD32 
+CFLAGS0 := -Wall -Werror -std=gnu99 -lpthread -m64 #-m32 -DNBD32 
 CFLAGS1 := $(CFLAGS0) -g #-O3 #-DNDEBUG #-fwhole-program -combine 
 CFLAGS2 := $(CFLAGS1) #-DENABLE_TRACE 
 CFLAGS3 := $(CFLAGS2) #-DLIST_USE_HAZARD_POINTER 
