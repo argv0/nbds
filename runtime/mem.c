@@ -14,8 +14,6 @@
 #include "rlocal.h"
 #include "lwt.h"
 
-#define RECYCLE_PAGES
-
 #define MAX_SCALE        31 // allocate blocks up to 4GB (arbitrary, could be bigger)
 #ifndef NBD32
 #define MIN_SCALE         3 // smallest allocated block is 8 bytes

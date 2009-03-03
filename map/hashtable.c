@@ -10,6 +10,8 @@
  * Every atomic operation is also an implicit full memory barrier. The upshot is that it simplifies
  * the code a bit, but it won't be as fast as it could be on platforms that provide weaker 
  * operations like and unfenced CAS which would still do the job.
+ *
+ * 11FebO9 - Bug fix in ht_iter_next() from Rui Ueyama
  */
 
 #include <stdio.h>
@@ -677,9 +679,6 @@ map_val_t ht_iter_next (ht_iter_t *iter, map_key_t *key_ptr) {
 
     } while (key == DOES_NOT_EXIST || val == DOES_NOT_EXIST || val == TOMBSTONE);
 
-    if (key_ptr) {
-        *key_ptr = key;
-    }
     if (val == COPIED_VALUE) {
         const datatype_t *key_type = iter->hti->ht->key_type;
 #ifdef NBD32
@@ -688,8 +687,15 @@ map_val_t ht_iter_next (ht_iter_t *iter, map_key_t *key_ptr) {
         uint32_t hash = (key_type == NULL) ? murmur32_8b((uint64_t)key) : key_type->hash((void *)key);
 #endif
         val = hti_get(iter->hti->next, (map_key_t)ent->key, hash);
+
+        // Go to the next entry if key is already deleted.
+        if (val == DOES_NOT_EXIST)
+            return ht_iter_next(iter, key_ptr); // recursive tail-call
     } 
 
+    if (key_ptr) {
+        *key_ptr = key;
+    }
     return val;
 }
 

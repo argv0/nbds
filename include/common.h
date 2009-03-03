@@ -16,13 +16,15 @@
 #define CACHE_LINE_SIZE  64 // 64 byte cache line on x86 and x86-64
 #define CACHE_LINE_SCALE 6  // log base 2 of the cache line size
 
-#define EXPECT_TRUE(x)     __builtin_expect(!!(x), 1)
-#define EXPECT_FALSE(x)    __builtin_expect(!!(x), 0)
+#define EXPECT_TRUE(x)      __builtin_expect(!!(x), 1)
+#define EXPECT_FALSE(x)     __builtin_expect(!!(x), 0)
 
-#define SYNC_SWAP          __sync_lock_test_and_set
-#define SYNC_CAS           __sync_val_compare_and_swap
-#define SYNC_ADD           __sync_add_and_fetch
-#define SYNC_FETCH_AND_OR  __sync_fetch_and_or
+#define SYNC_SWAP           __sync_lock_test_and_set
+#define SYNC_CAS            __sync_val_compare_and_swap
+#define SYNC_ADD            __sync_add_and_fetch
+#define SYNC_FETCH_AND_OR   __sync_fetch_and_or
+
+#define COUNT_TRAILING_ZEROS __builtin_ctz
 
 #define MASK(n)     ((1ULL << (n)) - 1)
 
@@ -50,6 +52,7 @@
 
 typedef unsigned long long uint64_t;
 typedef unsigned int       uint32_t;
+typedef unsigned short     uint16_t;
 typedef unsigned char      uint8_t;
 
 typedef size_t markable_t;

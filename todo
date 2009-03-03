@@ -18,7 +18,7 @@ quality
 optimization
 ------------
 - investigate 16 byte CAS; ht can store GUIDs inline instead of pointers to actual keys 
-- write after write can just update the old update record instead of pushing a new one
+- txn write after write can just update the old update record instead of pushing a new one
 - use a shared scan for write-set validation in txn, similar to ht copy logic
 - experiment with the performance impact of not passing the hash between functions in ht
 - experiment with embedding the nstring keys in the list/skiplist nodes
@@ -28,3 +28,5 @@ features
 - allow values of 0 to be inserted into maps (change DOES_NOT_EXIST to something other than 0)
 - read-committed type transactions
 - recycle free regions across size-classes and between threads
+
+
