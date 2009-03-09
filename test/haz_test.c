@@ -17,7 +17,6 @@
 #include "hazard.h"
 
 #define NUM_ITERATIONS 10000000
-#define MAX_NUM_THREADS 4
 
 typedef struct node {
     struct node *next;
@@ -77,7 +76,7 @@ void *worker (void *arg) {
 int main (int argc, char **argv) {
     //lwt_set_trace_level("m0r0");
 
-    int num_threads = 2;
+    int num_threads = MAX_NUM_THREADS;
     if (argc == 2)
     {
         errno = 0;

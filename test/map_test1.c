@@ -66,7 +66,7 @@ int main (int argc, char **argv) {
         return -1;
     }
 
-    num_threads_ = 2;
+    num_threads_ = MAX_NUM_THREADS;
     if (argc == 2)
     {
         errno = 0;

@@ -118,7 +118,7 @@ static int find_pred (node_t **pred_ptr, node_t **item_ptr, list_t *ll, map_key_
             // Unlink logically removed items.
             TRACE("l3", "find_pred: unlinking marked item %p next is %p", item, next);
 
-            markable_t other = SYNC_CAS(&pred->next, item, STRIP_MARK(next));
+            markable_t other = SYNC_CAS(&pred->next, (markable_t)item, (markable_t)STRIP_MARK(next));
             if (other == (markable_t)item) {
                 TRACE("l2", "find_pred: unlinked item %p from pred %p", item, pred);
                 item = STRIP_MARK(next);
@@ -230,7 +230,7 @@ map_val_t ll_cas (list_t *ll, map_key_t key, map_val_t expectation, map_val_t ne
             map_key_t new_key = ll->key_type == NULL ? key : (map_key_t)ll->key_type->clone((void *)key);
             node_t *new_item = node_alloc(new_key, new_val);
             markable_t next = new_item->next = (markable_t)old_item;
-            markable_t other = SYNC_CAS(&pred->next, next, new_item);
+            markable_t other = SYNC_CAS(&pred->next, (markable_t)next, (markable_t)new_item);
             if (other == next) {
                 TRACE("l1", "ll_cas: successfully inserted new item %p", new_item, 0);
                 return DOES_NOT_EXIST; // success
@@ -310,7 +310,7 @@ map_val_t ll_remove (list_t *ll, map_key_t key) {
     // item earlier, we logically removed it. 
     TRACE("l2", "ll_remove: unlink the item by linking its pred %p to its successor %p", pred, next);
     markable_t other;
-    if ((other = SYNC_CAS(&pred->next, item, next)) != (markable_t)item) {
+    if ((other = SYNC_CAS(&pred->next, (markable_t)item, next)) != (markable_t)item) {
         TRACE("l1", "ll_remove: unlink failed; pred's link changed from %p to %p", item, other);
         return val;
     } 

@@ -9,7 +9,7 @@
  * Note: This is code uses synchronous atomic operations because that is all that x86 provides. 
  * Every atomic operation is also an implicit full memory barrier. The upshot is that it simplifies
  * the code a bit, but it won't be as fast as it could be on platforms that provide weaker 
- * operations like and unfenced CAS which would still do the job.
+ * operations like unfenced CAS which would still do the job.
  *
  * 11FebO9 - Bug fix in ht_iter_next() from Rui Ueyama
  */
@@ -57,8 +57,8 @@ struct ht {
     const datatype_t *key_type;
 };
 
-static const map_val_t COPIED_VALUE           = TAG_VALUE(DOES_NOT_EXIST, TAG1);
-static const map_val_t TOMBSTONE              = STRIP_TAG(-1, TAG1);
+static const map_val_t COPIED_VALUE          = TAG_VALUE(DOES_NOT_EXIST, TAG1);
+static const map_val_t TOMBSTONE             = STRIP_TAG(-1, TAG1);
 
 static const unsigned ENTRIES_PER_BUCKET     = CACHE_LINE_SIZE/sizeof(entry_t);
 static const unsigned ENTRIES_PER_COPY_CHUNK = CACHE_LINE_SIZE/sizeof(entry_t)*2;
@@ -143,7 +143,7 @@ static hti_t *hti_alloc (hashtable_t *parent, int scale) {
     memset(hti, 0, sizeof(hti_t));
     hti->scale = scale;
 
-    size_t sz = sizeof(entry_t) * (1 << scale);
+    size_t sz = sizeof(entry_t) * (1ULL << scale);
 #ifdef USE_SYSTEM_MALLOC
     hti->unaligned_table_ptr = nbd_malloc(sz + CACHE_LINE_SIZE - 1);
     hti->table = (void *)(((size_t)hti->unaligned_table_ptr + CACHE_LINE_SIZE - 1) & ~(CACHE_LINE_SIZE - 1));
@@ -153,7 +153,7 @@ static hti_t *hti_alloc (hashtable_t *parent, int scale) {
     memset((void *)hti->table, 0, sz);
 
     // When searching for a key probe a maximum of 1/4 of the buckets up to 1000 buckets.
-    hti->max_probe = ((1 << (hti->scale - 2)) / ENTRIES_PER_BUCKET) + 4;
+    hti->max_probe = ((1ULL << (hti->scale - 2)) / ENTRIES_PER_BUCKET) + 4;
     if (hti->max_probe > MAX_BUCKETS_TO_PROBE) {
         hti->max_probe = MAX_BUCKETS_TO_PROBE;
     }
@@ -177,8 +177,8 @@ static void hti_start_copy (hti_t *hti) {
     // heuristics to determine the size of the new table
     size_t count = ht_count(hti->ht);
     unsigned int new_scale = hti->scale;
-    new_scale += (count > (1 << (new_scale - 2))); // double size if more than 1/4 full
-    new_scale += (count > (1 << (new_scale - 2))); // double size again if more than 1/2 full
+    new_scale += (count > (1ULL << (new_scale - 2))); // double size if more than 1/4 full
+    new_scale += (count > (1ULL << (new_scale - 2))); // double size again if more than 1/2 full
 
     // Allocate the new table and attempt to install it.
     hti_t *next = hti_alloc(hti->ht, new_scale);
@@ -205,7 +205,7 @@ static int hti_copy_entry (hti_t *ht1, volatile entry_t *ht1_ent, uint32_t key_h
     assert(ht1);
     assert(ht1->next);
     assert(ht2);
-    assert(ht1_ent >= ht1->table && ht1_ent < ht1->table + (1 << ht1->scale));
+    assert(ht1_ent >= ht1->table && ht1_ent < ht1->table + (1ULL << ht1->scale));
 #ifndef NBD32
     assert(key_hash == 0 || ht1->ht->key_type == NULL || (key_hash >> 16) == (ht1_ent->key >> 48));
 #endif
@@ -473,9 +473,9 @@ static int hti_help_copy (hti_t *hti) {
     size_t x = hti->copy_scan; 
 
     TRACE("h1", "ht_cas: help copy. scan is %llu, size is %llu", x, 1<<hti->scale);
-    if (total_copied != (1 << hti->scale)) {
+    if (total_copied != (1ULL << hti->scale)) {
         // Panic if we've been around the array twice and still haven't finished the copy.
-        int panic = (x >= (1 << (hti->scale + 1))); 
+        int panic = (x >= (1ULL << (hti->scale + 1))); 
         if (!panic) {
             limit = ENTRIES_PER_COPY_CHUNK;
 
@@ -491,26 +491,26 @@ static int hti_help_copy (hti_t *hti) {
             TRACE("h1", "ht_cas: help copy panic", 0, 0);
             // scan the whole table
             ent = hti->table;
-            limit = (1 << hti->scale);
+            limit = (1ULL << hti->scale);
         }
 
         // Copy the entries
         for (int i = 0; i < limit; ++i) {
             num_copied += hti_copy_entry(hti, ent++, 0, hti->next);
-            assert(ent <= hti->table + (1 << hti->scale));
+            assert(ent <= hti->table + (1ULL << hti->scale));
         }
         if (num_copied != 0) {
             total_copied = SYNC_ADD(&hti->num_entries_copied, num_copied);
         }
     }
 
-    return (total_copied == (1 << hti->scale));
+    return (total_copied == (1ULL << hti->scale));
 }
 
 static void hti_defer_free (hti_t *hti) {
     assert(hti->ref_count == 0);
 
-    for (uint32_t i = 0; i < (1 << hti->scale); ++i) {
+    for (uint32_t i = 0; i < (1ULL << hti->scale); ++i) {
         map_key_t key = hti->table[i].key;
         map_val_t val = hti->table[i].val;
         if (val == COPIED_VALUE)
@@ -628,7 +628,7 @@ void ht_print (hashtable_t *ht) {
     hti_t *hti = ht->hti;
     while (hti) {
         printf("hti:%p scale:%u count:%d copied:%d\n", hti, hti->scale, hti->count, hti->num_entries_copied);
-        for (int i = 0; i < (1 << hti->scale); ++i) {
+        for (int i = 0; i < (1ULL << hti->scale); ++i) {
             volatile entry_t *ent = hti->table + i;
             printf("[0x%x] 0x%llx:0x%llx\n", i, (uint64_t)ent->key, (uint64_t)ent->val);
             if (i > 30) {
@@ -667,7 +667,7 @@ map_val_t ht_iter_next (ht_iter_t *iter, map_key_t *key_ptr) {
     volatile entry_t *ent;
     map_key_t key;
     map_val_t val;
-    size_t table_size = (1 << iter->hti->scale);
+    size_t table_size = (1ULL << iter->hti->scale);
     do {
         iter->idx++;
         if (iter->idx == table_size) {

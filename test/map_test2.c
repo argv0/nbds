@@ -136,7 +136,7 @@ void *add_remove_worker (void *arg) {
     map_t *map = wd->map;
     CuTest* tc = wd->tc;
     int d = wd->id;
-    int iters = 10000;
+    int iters = (map_type_ == &MAP_IMPL_LL ? 10000 : 100000);
 
     (void)SYNC_ADD(wd->wait, -1);
     do { } while (*wd->wait); // wait for all workers to be ready
@@ -180,8 +180,7 @@ void concurrent_add_remove_test (CuTest* tc) {
 
     pthread_t thread[2];
     worker_data_t wd[2];
-    static const int num_threads = 2;
-    volatile int wait = num_threads;
+    volatile int wait = 2;
 #ifdef TEST_STRING_KEYS
     map_t *map = map_alloc(map_type_, &DATATYPE_NSTRING);
 #else
@@ -193,7 +192,7 @@ void concurrent_add_remove_test (CuTest* tc) {
 
     // In 2 threads, add & remove even & odd elements concurrently
     int i;
-    for (i = 0; i < num_threads; ++i) {
+    for (i = 0; i < 2; ++i) {
         wd[i].id = i;
         wd[i].tc = tc;
         wd[i].map = map;
@@ -202,14 +201,14 @@ void concurrent_add_remove_test (CuTest* tc) {
         if (rc != 0) { perror("nbd_thread_create"); return; }
     }
 
-    for (i = 0; i < num_threads; ++i) {
+    for (i = 0; i < 2; ++i) {
         pthread_join(thread[i], NULL);
     }
 
     gettimeofday(&tv2, NULL);
     int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
     map_print(map);
-    printf("Th:%d Time:%dms\n", num_threads, ms);
+    printf("Time:%dms\n", ms);
     fflush(stdout);
 
     // In the end, all members should be removed
@@ -316,7 +315,7 @@ void big_iteration_test (CuTest* tc) {
 }
 
 int main (void) {
-    lwt_set_trace_level("H3m3l2t0");
+    lwt_set_trace_level("r0m3l2t0");
 
     static const map_impl_t *map_types[] = { &MAP_IMPL_LL, &MAP_IMPL_SL, &MAP_IMPL_HT };
     for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {
@@ -327,9 +326,9 @@ int main (void) {
         CuSuite* suite = CuSuiteNew();
 
         SUITE_ADD_TEST(suite, concurrent_add_remove_test);
-        SUITE_ADD_TEST(suite, basic_test);
-        SUITE_ADD_TEST(suite, basic_iteration_test);
-        SUITE_ADD_TEST(suite, big_iteration_test);
+//        SUITE_ADD_TEST(suite, basic_test);
+//        SUITE_ADD_TEST(suite, basic_iteration_test);
+//        SUITE_ADD_TEST(suite, big_iteration_test);
 
         CuSuiteRun(suite);
         CuSuiteDetails(suite, output);

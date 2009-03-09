@@ -11,18 +11,31 @@
 #include <string.h>
 #include <sys/types.h>
 
-#define MAX_NUM_THREADS  4 // make this whatever you want, but make it a power of 2
-
 #define CACHE_LINE_SIZE  64 // 64 byte cache line on x86 and x86-64
 #define CACHE_LINE_SCALE 6  // log base 2 of the cache line size
 
 #define EXPECT_TRUE(x)      __builtin_expect(!!(x), 1)
 #define EXPECT_FALSE(x)     __builtin_expect(!!(x), 0)
 
-#define SYNC_SWAP           __sync_lock_test_and_set
-#define SYNC_CAS            __sync_val_compare_and_swap
-#define SYNC_ADD            __sync_add_and_fetch
-#define SYNC_FETCH_AND_OR   __sync_fetch_and_or
+#ifndef NBD_SINGLE_THREADED
+
+#define MAX_NUM_THREADS  16 // make this whatever you want, but make it a power of 2
+
+#define SYNC_SWAP(addr,x)         __sync_lock_test_and_set(addr,x)
+#define SYNC_CAS(addr,old,x)      __sync_val_compare_and_swap(addr,old,x)
+#define SYNC_ADD(addr,n)          __sync_add_and_fetch(addr,n)
+#define SYNC_FETCH_AND_OR(addr,x) __sync_fetch_and_or(addr,x)
+#else// NBD_SINGLE_THREADED
+
+#define MAX_NUM_THREADS  1
+
+#define SYNC_SWAP(addr,x)         ({ typeof(*(addr)) _old = *(addr); *(addr)  = (x); _old; })
+#define SYNC_CAS(addr,old,x)      ({ typeof(*(addr)) _old = *(addr); *(addr)  = (x); _old; })
+//#define SYNC_CAS(addr,old,x)    ({ typeof(*(addr)) _old = *(addr); if ((old) == _old) { *(addr)  = (x); } _old; })
+#define SYNC_ADD(addr,n)          ({ typeof(*(addr)) _old = *(addr); *(addr) += (n); _old; })
+#define SYNC_FETCH_AND_OR(addr,x) ({ typeof(*(addr)) _old = *(addr); *(addr) |= (x); _old; })
+
+#endif//NBD_SINGLE_THREADED
 
 #define COUNT_TRAILING_ZEROS __builtin_ctz
 

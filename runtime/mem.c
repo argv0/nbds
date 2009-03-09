@@ -14,18 +14,19 @@
 #include "rlocal.h"
 #include "lwt.h"
 
-#define MAX_SCALE        31 // allocate blocks up to 4GB (arbitrary, could be bigger)
 #ifndef NBD32
+#define MAX_SCALE        36 // allocate blocks up to 64GB (arbitrary, could be bigger)
 #define MIN_SCALE         3 // smallest allocated block is 8 bytes
 #define MAX_POINTER_BITS 48
 #define PAGE_SCALE       21 // 2MB pages
 #else
+#define MAX_SCALE        31 
 #define MIN_SCALE         2 // smallest allocated block is 4 bytes
 #define MAX_POINTER_BITS 32
 #define PAGE_SCALE       12 // 4KB pages
 #endif
-#define PAGE_SIZE        (1 << PAGE_SCALE)
-#define HEADERS_SIZE     (((size_t)1 << (MAX_POINTER_BITS - PAGE_SCALE)) * sizeof(header_t))
+#define PAGE_SIZE        (1ULL << PAGE_SCALE)
+#define HEADERS_SIZE     (((size_t)1ULL << (MAX_POINTER_BITS - PAGE_SCALE)) * sizeof(header_t))
 
 typedef struct block {
     struct block *next;
@@ -83,7 +84,7 @@ static void *get_new_region (int block_scale) {
         return region;
     }
 #endif//RECYCLE_PAGES
-    size_t region_size = (1 << block_scale);
+    size_t region_size = (1ULL << block_scale);
     if (region_size < PAGE_SIZE) {
         region_size = PAGE_SIZE;
     }
@@ -155,13 +156,13 @@ void nbd_free (void *x) {
     ASSERT(b_scale && b_scale <= MAX_SCALE);
 #ifdef RECYCLE_PAGES
     if (b_scale > PAGE_SCALE) {
-        int rc = munmap(x, 1 << b_scale);
+        int rc = munmap(x, 1ULL << b_scale);
         ASSERT(rc == 0);
         rc = rc;
     }
 #endif
 #ifndef NDEBUG
-    memset(b, 0xcd, (1 << b_scale)); // bear trap
+    memset(b, 0xcd, (1ULL << b_scale)); // bear trap
 #endif
     tl_t *tl = &tl_[tid_]; // thread-local data
     if (h->owner == tid_) {
@@ -270,6 +271,7 @@ void *nbd_malloc (size_t n) {
     if (b != NULL) {
         TRACE("m1", "nbd_malloc: returning block %p", b, 0);
         return b;
+    assert(b);
     }
 
     // The free list is empty so process blocks freed from other threads and then check again.
@@ -278,6 +280,7 @@ void *nbd_malloc (size_t n) {
     if (b != NULL) {
         TRACE("m1", "nbd_malloc: returning block %p", b, 0);
         return b;
+    assert(b);
     }
 
 #ifdef  RECYCLE_PAGES
@@ -292,6 +295,7 @@ void *nbd_malloc (size_t n) {
         ASSERT(b != NULL);
         TRACE("m1", "nbd_malloc: returning block %p", b, 0);
         return b;
+    assert(b);
     }
     // There are no partially allocated pages so get a new page.
 
@@ -304,7 +308,7 @@ void *nbd_malloc (size_t n) {
     // Break up the remainder of the page into blocks and put them on the free list. Start at the
     // end of the page so that the free list ends up in increasing order, for ease of debugging.
     if (b_scale < PAGE_SCALE) {
-        size_t block_size = (1 << b_scale);
+        size_t block_size = (1ULL << b_scale);
         block_t *head = NULL;
         for (int offset = PAGE_SIZE - block_size; offset > 0; offset -= block_size) {
             block_t *x = (block_t *)(page + offset);
@@ -319,16 +323,20 @@ void *nbd_malloc (size_t n) {
     }
 
     TRACE("m1", "nbd_malloc: returning block %p from new region %p", b, (size_t)b & ~MASK(PAGE_SCALE));
+    assert(b);
     return b;
 }
 #else//USE_SYSTEM_MALLOC
 #include <stdlib.h>
+#include "common.h"
+#include "rlocal.h"
+#include "lwt.h"
 
 void mem_init (void) {
     return;
 }
 
-void ndb_free (void *x) {
+void nbd_free (void *x) {
     TRACE("m1", "nbd_free: %p", x, 0);
 #ifndef NDEBUG
     memset(x, 0xcd, sizeof(void *)); // bear trap

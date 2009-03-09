@@ -11,7 +11,7 @@
 #include "mem.h"
 
 #define LWT_BUFFER_SCALE 20
-#define LWT_BUFFER_SIZE (1 << LWT_BUFFER_SCALE)
+#define LWT_BUFFER_SIZE (1ULL << LWT_BUFFER_SCALE)
 #define LWT_BUFFER_MASK (LWT_BUFFER_SIZE - 1)
 
 volatile int halt_ = 0;

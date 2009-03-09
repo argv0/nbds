@@ -31,7 +31,7 @@ static fifo_t *pending_[MAX_NUM_THREADS] = {};
 static int num_threads_ = 0;
 
 static fifo_t *fifo_alloc(int scale) {
-    fifo_t *q = (fifo_t *)nbd_malloc(sizeof(fifo_t) + (1 << scale) * sizeof(void *)); 
+    fifo_t *q = (fifo_t *)nbd_malloc(sizeof(fifo_t) + (1ULL << scale) * sizeof(void *)); 
     memset(q, 0, sizeof(fifo_t));
     q->scale = scale;
     q->head = 0;
@@ -51,6 +51,7 @@ void rcu_update (void) {
     LOCALIZE_THREAD_LOCAL(tid_, int);
     assert(tid_ < num_threads_);
     int next_thread_id = (tid_ + 1) % num_threads_;
+    TRACE("r1", "rcu_update: updating thread %llu", next_thread_id, 0);
     int i;
     for (i = 0; i < num_threads_; ++i) {
         if (i == tid_)
@@ -62,6 +63,7 @@ void rcu_update (void) {
 
         uint64_t x = rcu_[tid_][i];
         rcu_[next_thread_id][i] = rcu_last_posted_[tid_][i] = x;
+        TRACE("r2", "rcu_update: posted updated value (%llu) for thread %llu", x, i);
     }
 
     // free
