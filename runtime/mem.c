@@ -97,7 +97,7 @@ static void *get_new_region (int block_scale) {
     if ((size_t)region & (region_size - 1)) {
         TRACE("m0", "get_new_region: region not aligned", 0, 0);
         munmap(region, region_size);
-        region = mmap(NULL, region_size * 2, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
+        region = mmap(NULL, region_size * 2, PROT_READ|PROT_WRITE, MAP_NORESERVE|MAP_ANON|MAP_PRIVATE, -1, 0);
         if (region == (void *)-1) {
             perror("get_new_region: mmap");
             exit(-1);

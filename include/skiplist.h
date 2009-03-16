@@ -11,7 +11,7 @@ map_val_t  sl_cas     (skiplist_t *sl, map_key_t key, map_val_t expected_val, ma
 map_val_t  sl_lookup  (skiplist_t *sl, map_key_t key);
 map_val_t  sl_remove  (skiplist_t *sl, map_key_t key);
 size_t     sl_count   (skiplist_t *sl);
-void       sl_print   (skiplist_t *sl);
+void       sl_print   (skiplist_t *sl, int verbose);
 void       sl_free    (skiplist_t *sl);
 map_key_t  sl_min_key (skiplist_t *sl);
 

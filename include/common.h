@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by Josh Dybnis and released to the public domain, as explained at
  * http://creativecommons.org/licenses/publicdomain
  */
@@ -19,7 +19,7 @@
 
 #ifndef NBD_SINGLE_THREADED
 
-#define MAX_NUM_THREADS  16 // make this whatever you want, but make it a power of 2
+#define MAX_NUM_THREADS  32 // make this whatever you want, but make it a power of 2
 
 #define SYNC_SWAP(addr,x)         __sync_lock_test_and_set(addr,x)
 #define SYNC_CAS(addr,old,x)      __sync_val_compare_and_swap(addr,old,x)

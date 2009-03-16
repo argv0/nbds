@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by Josh Dybnis and released to the public domain, as explained at
  * http://creativecommons.org/licenses/publicdomain
  *
@@ -31,7 +31,7 @@ static fifo_t *pending_[MAX_NUM_THREADS] = {};
 static int num_threads_ = 0;
 
 static fifo_t *fifo_alloc(int scale) {
-    fifo_t *q = (fifo_t *)nbd_malloc(sizeof(fifo_t) + (1ULL << scale) * sizeof(void *)); 
+    fifo_t *q = (fifo_t *)nbd_malloc(sizeof(fifo_t) + (1ULL << scale) * sizeof(void *));
     memset(q, 0, sizeof(fifo_t));
     q->scale = scale;
     q->head = 0;

@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by Josh Dybnis and released to the public domain, as explained at
  * http://creativecommons.org/licenses/publicdomain
  *
@@ -9,10 +9,10 @@
  * See also Kir Fraser's dissertation "Practical Lock Freedom".
  * www.cl.cam.ac.uk/techreports/UCAM-CL-TR-579.pdf
  *
- * I've generalized the data structure to support update operations like set() and CAS() in addition to 
+ * I've generalized the data structure to support update operations like set() and CAS() in addition to
  * the normal add() and remove() operations.
  *
- * Warning: This code is written for the x86 memory-model. The algorithim depends on certain stores 
+ * Warning: This code is written for the x86 memory-model. The algorithim depends on certain stores
  * and loads being ordered. This code won't work correctly on platforms with weaker memory models if
  * you don't add memory barriers in the right places.
  */
@@ -27,7 +27,7 @@
 #include "rcu.h"
 
 // Setting MAX_LEVELS to 1 essentially makes this data structure the Harris-Michael lock-free list (see list.c).
-#define MAX_LEVELS 32
+#define MAX_LEVELS 15
 
 enum unlink {
     FORCE_UNLINK,
@@ -49,7 +49,7 @@ struct sl_iter {
 struct sl {
     node_t *head;
     const datatype_t *key_type;
-    int high_water; // max level of any item in the list
+    int high_water; // max historic number of levels
 };
 
 // Marking the <next> field of a node logically removes it from the list
@@ -65,11 +65,18 @@ static inline node_t * STRIP_MARK(markable_t x) { return ((node_t *)STRIP_TAG(x,
 #define STRIP_MARK(x) ((node_t *)STRIP_TAG((x), 0x1))
 #endif
 
-static int random_levels (void) {
+static int random_levels (skiplist_t *sl) {
     unsigned r = nbd_rand();
-    int n = __builtin_ctz(r) / 2 + 1;
-    if (n > MAX_LEVELS) { n = MAX_LEVELS; }
-    return n;
+    int z = __builtin_ctz(r);
+    int levels = (int)(z / 1.5);
+    if (levels == 0)
+        return 1;
+    if (levels > sl->high_water) {
+        levels = SYNC_ADD(&sl->high_water, 1);
+        TRACE("s2", "random_levels: increased high water mark to %lld", sl->high_water, 0);
+    }
+    if (levels > MAX_LEVELS) { levels = MAX_LEVELS; }
+    return levels;
 }
 
 static node_t *node_alloc (int num_levels, map_key_t key, map_val_t val) {
@@ -87,7 +94,7 @@ static node_t *node_alloc (int num_levels, map_key_t key, map_val_t val) {
 skiplist_t *sl_alloc (const datatype_t *key_type) {
     skiplist_t *sl = (skiplist_t *)nbd_malloc(sizeof(skiplist_t));
     sl->key_type = key_type;
-    sl->high_water = 0;
+    sl->high_water = 1;
     sl->head = node_alloc(MAX_LEVELS, 0, 0);
     memset(sl->head->next, 0, MAX_LEVELS * sizeof(skiplist_t *));
     return sl;
@@ -190,7 +197,7 @@ static node_t *find_preds (node_t **preds, node_t **succs, int n, skiplist_t *sl
 
         TRACE("s3", "find_preds: found pred %p next %p", pred, item);
 
-        if (level < n) { 
+        if (level < n) {
             if (preds != NULL) {
                 preds[level] = pred;
             }
@@ -222,7 +229,7 @@ map_val_t sl_lookup (skiplist_t *sl, map_key_t key) {
         }
     }
 
-    TRACE("l1", "sl_lookup: no item in the skiplist matched the key", 0, 0);
+    TRACE("s1", "sl_lookup: no item in the skiplist matched the key", 0, 0);
     return DOES_NOT_EXIST;
 }
 
@@ -247,15 +254,14 @@ static map_val_t update_item (node_t *item, map_val_t expectation, map_val_t new
     }
 
     if (EXPECT_FALSE(expectation == CAS_EXPECT_DOES_NOT_EXIST)) {
-        TRACE("s1", "update_item: found an item %p in the skiplist that matched the key. the expectation was "
-                "not met, the skiplist was not changed", item, old_val);
+        TRACE("s1", "update_item: the expectation was not met; the skiplist was not changed", 0, 0);
         return old_val; // failure
     }
 
     // Use a CAS and not a SWAP. If the CAS fails it means another thread removed the node or updated its
     // value. If another thread removed the node but it is not unlinked yet and we used a SWAP, we could
     // replace DOES_NOT_EXIST with our value. Then another thread that is updating the value could think it
-    // succeeded and return our value even though it should return DOES_NOT_EXIST. 
+    // succeeded and return our value even though it should return DOES_NOT_EXIST.
     if (old_val == SYNC_CAS(&item->val, old_val, new_val)) {
         TRACE("s1", "update_item: the CAS succeeded. updated the value of the item", 0, 0);
         return old_val; // success
@@ -274,11 +280,7 @@ map_val_t sl_cas (skiplist_t *sl, map_key_t key, map_val_t expectation, map_val_
     node_t *preds[MAX_LEVELS];
     node_t *nexts[MAX_LEVELS];
     node_t *new_item = NULL;
-    int n = random_levels();
-    if (n > sl->high_water) {
-        n = SYNC_ADD(&sl->high_water, 1);
-        TRACE("s2", "sl_cas: incremented high water mark to %p", n, 0);
-    }
+    int n = random_levels(sl);
     node_t *old_item = find_preds(preds, nexts, n, sl, key, ASSIST_UNLINK);
 
     // If there is already an item in the skiplist that matches the key just update its value.
@@ -288,12 +290,12 @@ map_val_t sl_cas (skiplist_t *sl, map_key_t key, map_val_t expectation, map_val_
             return ret_val;
 
         // If we lose a race with a thread removing the item we tried to update then we have to retry.
-        return sl_cas(sl, key, expectation, new_val); // tail call 
+        return sl_cas(sl, key, expectation, new_val); // tail call
     }
 
     if (EXPECT_FALSE(expectation != CAS_EXPECT_DOES_NOT_EXIST && expectation != CAS_EXPECT_WHATEVER)) {
-        TRACE("l1", "sl_cas: the expectation was not met, the skiplist was not changed", 0, 0);
-        return DOES_NOT_EXIST; // failure, the caller expected an item for the <key> to already exist 
+        TRACE("s1", "sl_cas: the expectation was not met, the skiplist was not changed", 0, 0);
+        return DOES_NOT_EXIST; // failure, the caller expected an item for the <key> to already exist
     }
 
     // Create a new node and insert it into the skiplist.
@@ -318,7 +320,7 @@ map_val_t sl_cas (skiplist_t *sl, map_key_t key, map_val_t expectation, map_val_
         if (sl->key_type != NULL) {
             nbd_free((void *)new_key);
         }
-        nbd_free(new_item); 
+        nbd_free(new_item);
         return sl_cas(sl, key, expectation, new_val); // tail call
     }
 
@@ -350,7 +352,7 @@ map_val_t sl_cas (skiplist_t *sl, map_key_t key, map_val_t expectation, map_val_
                 TRACE("s3", "sl_cas: attempting to update the new item's link from %p to %p", old_next, nexts[i]);
                 other = SYNC_CAS(&new_item->next[i], old_next, (markable_t)nexts[i]);
                 ASSERT(other == old_next || other == MARK_NODE(old_next));
-                
+
                 // If another thread is removing this item we can stop linking it into to skiplist
                 if (HAS_MARK(other)) {
                     find_preds(NULL, NULL, 0, sl, key, FORCE_UNLINK); // see comment below
@@ -392,16 +394,16 @@ map_val_t sl_remove (skiplist_t *sl, map_key_t key) {
             old_next = SYNC_CAS(&item->next[level], next, MARK_NODE((node_t *)next));
             if (HAS_MARK(old_next)) {
                 TRACE("s2", "sl_remove: %p is already marked for removal by another thread (next %p)", item, old_next);
-                if (level == 0) 
+                if (level == 0)
                     return DOES_NOT_EXIST;
                 break;
             }
         } while (next != old_next);
     }
 
-    // Atomically swap out the item's value in case another thread is updating the item while we are 
-    // removing it. This establishes which operation occurs first logically, the update or the remove. 
-    map_val_t val = SYNC_SWAP(&item->val, DOES_NOT_EXIST); 
+    // Atomically swap out the item's value in case another thread is updating the item while we are
+    // removing it. This establishes which operation occurs first logically, the update or the remove.
+    map_val_t val = SYNC_SWAP(&item->val, DOES_NOT_EXIST);
     TRACE("s2", "sl_remove: replaced item %p's value with DOES_NOT_EXIT", item, 0);
 
     // unlink the item
@@ -416,52 +418,54 @@ map_val_t sl_remove (skiplist_t *sl, map_key_t key) {
     return val;
 }
 
-void sl_print (skiplist_t *sl) {
+void sl_print (skiplist_t *sl, int verbose) {
 
-    printf("high water: %d levels\n", sl->high_water);
-    for (int level = MAX_LEVELS - 1; level >= 0; --level) {
+    if (verbose) {
+        for (int level = MAX_LEVELS - 1; level >= 0; --level) {
+            node_t *item = sl->head;
+            if (item->next[level] == DOES_NOT_EXIST)
+                continue;
+            printf("(%d) ", level);
+            int i = 0;
+            while (item) {
+                markable_t next = item->next[level];
+                printf("%s%p ", HAS_MARK(next) ? "*" : "", item);
+                item = STRIP_MARK(next);
+                if (i++ > 30) {
+                    printf("...");
+                    break;
+                }
+            }
+            printf("\n");
+            fflush(stdout);
+        }
         node_t *item = sl->head;
-        if (item->next[level] == DOES_NOT_EXIST)
-            continue;
-        printf("(%d) ", level);
         int i = 0;
         while (item) {
-            markable_t next = item->next[level];
-            printf("%s%p ", HAS_MARK(next) ? "*" : "", item);
-            item = STRIP_MARK(next);
+            int is_marked = HAS_MARK(item->next[0]);
+            printf("%s%p:0x%llx ", is_marked ? "*" : "", item, (uint64_t)item->key);
+            if (item != sl->head) {
+                printf("[%d]", item->num_levels);
+            } else {
+                printf("[HEAD]");
+            }
+            for (int level = 1; level < item->num_levels; ++level) {
+                node_t *next = STRIP_MARK(item->next[level]);
+                is_marked = HAS_MARK(item->next[0]);
+                printf(" %p%s", next, is_marked ? "*" : "");
+                if (item == sl->head && item->next[level] == DOES_NOT_EXIST)
+                    break;
+            }
+            printf("\n");
+            fflush(stdout);
+            item = STRIP_MARK(item->next[0]);
             if (i++ > 30) {
-                printf("...");
+                printf("...\n");
                 break;
             }
         }
-        printf("\n");
-        fflush(stdout);
     }
-    node_t *item = sl->head;
-    int i = 0;
-    while (item) {
-        int is_marked = HAS_MARK(item->next[0]);
-        printf("%s%p:0x%llx ", is_marked ? "*" : "", item, (uint64_t)item->key);
-        if (item != sl->head) {
-            printf("[%d]", item->num_levels);
-        } else {
-            printf("[HEAD]");
-        }
-        for (int level = 1; level < item->num_levels; ++level) {
-            node_t *next = STRIP_MARK(item->next[level]);
-            is_marked = HAS_MARK(item->next[0]);
-            printf(" %p%s", next, is_marked ? "*" : "");
-            if (item == sl->head && item->next[level] == DOES_NOT_EXIST)
-                break;
-        }
-        printf("\n");
-        fflush(stdout);
-        item = STRIP_MARK(item->next[0]);
-        if (i++ > 30) {
-            printf("...\n");
-            break;
-        }
-    }
+    printf("levels:%-2d  count:%-6lld \n", sl->high_water, (uint64_t)sl_count(sl));
 }
 
 sl_iter_t *sl_iter_begin (skiplist_t *sl, map_key_t key) {

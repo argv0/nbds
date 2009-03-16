@@ -1,4 +1,4 @@
-/* 
+/*
  * Written by Josh Dybnis and released to the public domain, as explained at
  * http://creativecommons.org/licenses/publicdomain
  *
@@ -19,8 +19,8 @@ struct map_iter {
     void *state;
 };
 
-map_t *map_alloc (const map_impl_t *map_impl, const datatype_t *key_type) { 
-    map_t *map = nbd_malloc(sizeof(map_t)); 
+map_t *map_alloc (const map_impl_t *map_impl, const datatype_t *key_type) {
+    map_t *map = nbd_malloc(sizeof(map_t));
     map->impl  = map_impl;
     map->data  = map->impl->alloc(key_type);
     return map;
@@ -30,8 +30,8 @@ void map_free (map_t *map) {
     map->impl->free_(map->data);
 }
 
-void map_print (map_t *map) {
-    map->impl->print(map->data);
+void map_print (map_t *map, int verbose) {
+    map->impl->print(map->data, verbose);
 }
 
 map_val_t map_count (map_t *map) {

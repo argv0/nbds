@@ -11,7 +11,7 @@ map_val_t  ll_cas     (list_t *ll, map_key_t key, map_val_t expected_val, map_va
 map_val_t  ll_lookup  (list_t *ll, map_key_t key);
 map_val_t  ll_remove  (list_t *ll, map_key_t key);
 size_t     ll_count   (list_t *ll);
-void       ll_print   (list_t *ll);
+void       ll_print   (list_t *ll, int verbose);
 void       ll_free    (list_t *ll);
 map_key_t  ll_min_key (list_t *sl);
 

@@ -329,22 +329,25 @@ map_val_t ll_remove (list_t *ll, map_key_t key) {
     return val;
 }
 
-void ll_print (list_t *ll) {
-    markable_t next = ll->head->next;
-    int i = 0;
-    while (next != DOES_NOT_EXIST) {
-        node_t *item = STRIP_MARK(next);
-        if (item == NULL)
-            break;
-        printf("%s%p:0x%llx ", HAS_MARK(item->next) ? "*" : "", item, (uint64_t)item->key);
-        fflush(stdout);
-        if (i++ > 30) {
-            printf("...");
-            break;
+void ll_print (list_t *ll, int verbose) {
+    if (verbose) {
+        markable_t next = ll->head->next;
+        int i = 0;
+        while (next != DOES_NOT_EXIST) {
+            node_t *item = STRIP_MARK(next);
+            if (item == NULL)
+                break;
+            printf("%s%p:0x%llx ", HAS_MARK(item->next) ? "*" : "", item, (uint64_t)item->key);
+            fflush(stdout);
+            if (i++ > 30) {
+                printf("...");
+                break;
+            }
+            next = item->next;
         }
-        next = item->next;
+        printf("\n");
     }
-    printf("\n");
+    printf("count:%llu\n", (uint64_t)ll_count(ll));
 }
 
 ll_iter_t *ll_iter_begin (list_t *ll, map_key_t key) {
