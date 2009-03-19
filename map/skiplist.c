@@ -27,7 +27,7 @@
 #include "rcu.h"
 
 // Setting MAX_LEVELS to 1 essentially makes this data structure the Harris-Michael lock-free list (see list.c).
-#define MAX_LEVELS 15
+#define MAX_LEVELS 24
 
 enum unlink {
     FORCE_UNLINK,
@@ -66,7 +66,7 @@ static inline node_t * STRIP_MARK(markable_t x) { return ((node_t *)STRIP_TAG(x,
 #endif
 
 static int random_levels (skiplist_t *sl) {
-    unsigned r = nbd_rand();
+    uint64_t r = nbd_rand();
     int z = __builtin_ctz(r);
     int levels = (int)(z / 1.5);
     if (levels == 0)

@@ -9,8 +9,6 @@ quality
 -------
 - verify the memory management of keys in list, skiplist, and hashtable
 - transaction tests
-- port perf tests from lib-high-scale
-- characterize the performance of hashtable vs. skiplist vs. list
 - validate function arguments in interface functions
 - document usage
 - document algorithms
@@ -22,11 +20,12 @@ optimization
 - use a shared scan for write-set validation in txn, similar to ht copy logic
 - experiment with the performance impact of not passing the hash between functions in ht
 - experiment with embedding the nstring keys in the list/skiplist nodes
+- lower skiplist's high_water when the actual number of levels in use drops
+- non-power-of 2 sized hashtables for improved memory usage
+- mem2
 
 features
 --------
 - allow values of 0 to be inserted into maps (change DOES_NOT_EXIST to something other than 0)
 - read-committed type transactions
 - recycle free regions across size-classes and between threads
-
-

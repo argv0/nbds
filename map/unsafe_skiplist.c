@@ -13,7 +13,7 @@
 #include "runtime.h"
 #include "mem.h"
 
-#define MAX_LEVELS 32
+#define MAX_LEVELS 24
 
 typedef struct node {
     map_key_t key;
@@ -33,7 +33,7 @@ struct sl {
 };
 
 static int random_levels (skiplist_t *sl) {
-    unsigned r = nbd_rand();
+    uint64_t r = nbd_rand();
     int z = __builtin_ctz(r);
     int levels = (int)(z / 1.5);
     if (levels == 0)
