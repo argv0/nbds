@@ -34,8 +34,8 @@ void lwt_set_trace_level (const char *flags);
 // the dump. It is only included when its specified category is enabled at a trace level greater than or equal to
 // the one in <flag>. Categories are case sensitive. 
 static inline void lwt_trace (const char *flag, const char *format, size_t value1, size_t value2) {
-    extern char flag_state_[256];
-    if (EXPECT_FALSE(flag_state_[(unsigned)flag[0]] >= flag[1])) {
+    extern char TraceLevel[256];
+    if (EXPECT_FALSE(TraceLevel[(unsigned)flag[0]] >= flag[1])) {
         // embed <flags> in <format> so we don't have to make the lwt_record_t any bigger than it already is
         uint64_t f = ((uint64_t)(size_t)format | ((uint64_t)flag[0] << 56) | ((uint64_t)flag[1] << 48));
         extern void lwt_trace_i (uint64_t format, size_t value1, size_t value2);

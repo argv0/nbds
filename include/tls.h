@@ -22,10 +22,16 @@
 
 #define INIT_THREAD_LOCAL(name) \
     do { \
-        if (pthread_key_create(&name##_KEY, NULL) != 0) { assert(FALSE); } \
+        if (pthread_key_create(&name##_KEY, NULL) != 0) { \
+            assert("error initializing thread local variable " #name, FALSE); \
+        } \
     } while (0)
 
-#define SET_THREAD_LOCAL(name, value) pthread_setspecific(name##_KEY, (void *)(size_t)value);
+#define SET_THREAD_LOCAL(name, value) \
+    do { \
+        name = value; \
+        pthread_setspecific(name##_KEY, (void *)(size_t)value); \
+    } while (0);
 
 #define LOCALIZE_THREAD_LOCAL(name, type) type name = (type)(size_t)pthread_getspecific(name##_KEY)
 

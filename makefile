@@ -5,15 +5,16 @@
 # Makefile for building programs with whole-program interfile optimization
 ###################################################################################################
 CFLAGS0 := -Wall -Werror -std=gnu99 -lpthread #-m32 -DNBD32
-CFLAGS1 := $(CFLAGS0) -g -O3 #-DNDEBUG #-fwhole-program -combine
+CFLAGS1 := $(CFLAGS0) -g #-DNDEBUG #-fwhole-program -combine
 CFLAGS2 := $(CFLAGS1) #-DENABLE_TRACE
 CFLAGS3 := $(CFLAGS2) #-DLIST_USE_HAZARD_POINTER
 CFLAGS  := $(CFLAGS3) #-DNBD_SINGLE_THREADED #-DUSE_SYSTEM_MALLOC #-DTEST_STRING_KEYS
 INCS    := $(addprefix -I, include)
-TESTS   := output/perf_test #output/map_test1 output/map_test2 output/rcu_test output/txn_test #output/haz_test
+TESTS   := output/perf_test output/map_test1 output/map_test2 output/rcu_test output/txn_test #output/haz_test
 OBJS    := $(TESTS)
 
-RUNTIME_SRCS := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c datatype/nstring.c #runtime/hazard.c
+RUNTIME_SRCS := runtime/runtime.c runtime/rcu.c runtime/lwt.c runtime/mem.c runtime/random.c \
+				datatype/nstring.c #runtime/hazard.c
 MAP_SRCS     := map/map.c map/list.c map/skiplist.c map/hashtable.c
 
 haz_test_SRCS  := $(RUNTIME_SRCS) test/haz_test.c

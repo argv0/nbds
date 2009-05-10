@@ -39,36 +39,35 @@ static fifo_t *fifo_alloc(int scale) {
     return q;
 }
 
-void rcu_thread_init (int id) {
-    assert(id < MAX_NUM_THREADS);
-    if (pending_[id] == NULL) {
-        pending_[id] = fifo_alloc(RCU_QUEUE_SCALE);
+void rcu_thread_init (void) {
+    int thread_index = GET_THREAD_INDEX();
+    if (pending_[thread_index] == NULL) {
+        pending_[thread_index] = fifo_alloc(RCU_QUEUE_SCALE);
         (void)SYNC_ADD(&num_threads_, 1);
     }
 }
 
 void rcu_update (void) {
-    LOCALIZE_THREAD_LOCAL(tid_, int);
-    assert(tid_ < num_threads_);
-    int next_thread_id = (tid_ + 1) % num_threads_;
-    TRACE("r1", "rcu_update: updating thread %llu", next_thread_id, 0);
+    int thread_index = GET_THREAD_INDEX();
+    int next_thread_index = (thread_index + 1) % num_threads_;
+    TRACE("r1", "rcu_update: updating thread %llu", next_thread_index, 0);
     int i;
     for (i = 0; i < num_threads_; ++i) {
-        if (i == tid_)
+        if (i == thread_index)
             continue;
 
         // No need to post an update if the value hasn't changed
-        if (rcu_[tid_][i] == rcu_last_posted_[tid_][i])
+        if (rcu_[thread_index][i] == rcu_last_posted_[thread_index][i])
             continue;
 
-        uint64_t x = rcu_[tid_][i];
-        rcu_[next_thread_id][i] = rcu_last_posted_[tid_][i] = x;
+        uint64_t x = rcu_[thread_index][i];
+        rcu_[next_thread_index][i] = rcu_last_posted_[thread_index][i] = x;
         TRACE("r2", "rcu_update: posted updated value (%llu) for thread %llu", x, i);
     }
 
     // free
-    fifo_t *q = pending_[tid_];
-    while (q->tail != rcu_[tid_][tid_]) {
+    fifo_t *q = pending_[thread_index];
+    while (q->tail != rcu_[thread_index][thread_index]) {
         uint32_t i = MOD_SCALE(q->tail, q->scale);
         TRACE("r0", "rcu_update: freeing %p from queue at position %llu", q->x[i], q->tail);
         nbd_free(q->x[i]);
@@ -78,17 +77,18 @@ void rcu_update (void) {
 
 void rcu_defer_free (void *x) {
     assert(x);
-    LOCALIZE_THREAD_LOCAL(tid_, int);
-    fifo_t *q = pending_[tid_];
+    int thread_index = GET_THREAD_INDEX();
+    fifo_t *q = pending_[thread_index];
     assert(MOD_SCALE(q->head + 1, q->scale) != MOD_SCALE(q->tail, q->scale));
     uint32_t i = MOD_SCALE(q->head, q->scale);
     q->x[i] = x;
     TRACE("r0", "rcu_defer_free: put %p on queue at position %llu", x, q->head);
     q->head++;
 
-    if (pending_[tid_]->head - rcu_last_posted_[tid_][tid_] >= RCU_POST_THRESHOLD) {
-        TRACE("r0", "rcu_defer_free: posting %llu", pending_[tid_]->head, 0);
-        int next_thread_id = (tid_ + 1) % num_threads_;
-        rcu_[next_thread_id][tid_] = rcu_last_posted_[tid_][tid_] = pending_[tid_]->head;
+    if (pending_[thread_index]->head - rcu_last_posted_[thread_index][thread_index] >= RCU_POST_THRESHOLD) {
+        TRACE("r0", "rcu_defer_free: posting %llu", pending_[thread_index]->head, 0);
+        int next_thread_index = (thread_index + 1) % num_threads_;
+        rcu_[next_thread_index][thread_index] = pending_[thread_index]->head;
+        rcu_last_posted_[thread_index][thread_index] = pending_[thread_index]->head;
     }
 }

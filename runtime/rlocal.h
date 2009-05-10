@@ -4,9 +4,15 @@
 #include "runtime.h"
 #include "tls.h"
 
-void mem_init (void);
+extern DECLARE_THREAD_LOCAL(ThreadId, int);
 
-void rcu_thread_init (int thread_id);
-void lwt_thread_init (int thread_id);
+#define GET_THREAD_INDEX() ({ LOCALIZE_THREAD_LOCAL(ThreadId, int); assert(ThreadId != 0); ThreadId - 1; })
+
+void mem_init (void);
+void rnd_init (void);
+
+void rnd_thread_init (void);
+void rcu_thread_init (void);
+void lwt_thread_init (void);
 
 #endif//RLOCAL_H 
