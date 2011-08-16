@@ -74,9 +74,9 @@ static inline header_t *get_header (void *r) {
 }
 
 static void *get_new_region (int block_scale) {
-    int thread_index = GET_THREAD_INDEX();
+    LOCALIZE_THREAD_LOCAL(tid_, int);
 #ifdef RECYCLE_PAGES
-    tl_t *tl = &tl_[thread_index]; // thread-local data
+    tl_t *tl = &tl_[tid_]; // thread-local data
     if (block_scale <= PAGE_SCALE && tl->free_pages != NULL) {
         void *region = tl->free_pages;
         tl->free_pages = tl->free_pages->next;
@@ -122,7 +122,7 @@ static void *get_new_region (int block_scale) {
     TRACE("m1", "get_new_region: header %p (%p)", h, h - headers_);
     assert(h->scale == 0);
     h->scale = block_scale;
-    h->owner = thread_index;
+    h->owner = tid_;
 
     return region;
 }
@@ -148,6 +148,7 @@ void mem_init (void) {
 void nbd_free (void *x) {
     TRACE("m1", "nbd_free: block %p page %p", x, (size_t)x & ~MASK(PAGE_SCALE));
     ASSERT(x);
+    LOCALIZE_THREAD_LOCAL(tid_, int);
     block_t  *b = (block_t *)x;
     header_t *h = get_header(x);
     int b_scale = h->scale;
@@ -163,9 +164,8 @@ void nbd_free (void *x) {
 #ifndef NDEBUG
     memset(b, 0xcd, (1ULL << b_scale)); // bear trap
 #endif
-    int thread_index = GET_THREAD_INDEX();
-    tl_t *tl = &tl_[thread_index]; // thread-local data
-    if (h->owner == thread_index) {
+    tl_t *tl = &tl_[tid_]; // thread-local data
+    if (h->owner == tid_) {
         TRACE("m1", "nbd_free: private block, old free list head %p", tl->free_list[b_scale], 0);
 
 #ifndef RECYCLE_PAGES
@@ -264,7 +264,8 @@ void *nbd_malloc (size_t n) {
     if (EXPECT_FALSE(b_scale < MIN_SCALE)) { b_scale = MIN_SCALE; }
     if (EXPECT_FALSE(b_scale > MAX_SCALE)) { return NULL; }
 
-    tl_t *tl = &tl_[GET_THREAD_INDEX()]; // thread-local data
+    LOCALIZE_THREAD_LOCAL(tid_, int);
+    tl_t *tl = &tl_[tid_]; // thread-local data
 
     block_t *b = pop_free_list(tl, b_scale);
     if (b != NULL) {

@@ -28,34 +28,35 @@ typedef struct lwt_buffer {
     lwt_record_t x[0];
 } lwt_buffer_t;
 
-lwt_buffer_t *TraceBuffer[MAX_NUM_THREADS] = {};
-char TraceLevel[256] = {};
-static const char *TraceSpec = "";
+lwt_buffer_t *lwt_buf_[MAX_NUM_THREADS] = {};
+char flag_state_[256] = {};
+static const char *flags_ = "";
 
-void lwt_thread_init (void) {
-    int thread_index = GET_THREAD_INDEX();
-
-    if (TraceBuffer[thread_index] == NULL) {
-        TraceBuffer[thread_index] = 
-            (lwt_buffer_t *)nbd_malloc(sizeof(lwt_buffer_t) + sizeof(lwt_record_t) * LWT_BUFFER_SIZE);
-        memset(TraceBuffer[thread_index], 0, sizeof(lwt_buffer_t));
+void lwt_thread_init (int thread_id)
+{
+    assert(thread_id < MAX_NUM_THREADS);
+    if (lwt_buf_[thread_id] == NULL) {
+        lwt_buf_[thread_id] = (lwt_buffer_t *)nbd_malloc(sizeof(lwt_buffer_t) + sizeof(lwt_record_t) * LWT_BUFFER_SIZE);
+        memset(lwt_buf_[thread_id], 0, sizeof(lwt_buffer_t));
     }
 }
 
-void lwt_set_trace_level (const char *flags) {
+void lwt_set_trace_level (const char *flags)
+{
     assert(strlen(flags) % 2 == 0); // a well formed <flags> should be an even number of characters long
-    TraceSpec = flags;
-    memset(TraceLevel, 0, sizeof(TraceLevel));
+    flags_ = flags;
+    memset(flag_state_, 0, sizeof(flag_state_));
     for (int i = 0; flags[i]; i+=2) {
-        TraceLevel[(unsigned)flags[i]] = flags[i+1];
+        flag_state_[(unsigned)flags[i]] = flags[i+1];
     }
 }
 
-static void dump_record (FILE *file, int thread_id, lwt_record_t *r, uint64_t offset) {
+static void dump_record (FILE *file, int thread_id, lwt_record_t *r, uint64_t offset)
+{
     // print the record if its trace category is enabled at a high enough level
     int flag  =  r->format >> 56;
     int level = (r->format >> 48) & 0xFF;
-    if (TraceLevel[(unsigned)flag] >= level) {
+    if (flag_state_[(unsigned)flag] >= level) {
         char s[3] = {flag, level, '\0'};
         fprintf(file, "%09llu %d %s ", ((uint64_t)r->timestamp - offset) >> 5, thread_id, s);
         const char *format = (const char *)(size_t)(r->format & MASK(48)); // strip out the embedded flags
@@ -64,17 +65,18 @@ static void dump_record (FILE *file, int thread_id, lwt_record_t *r, uint64_t of
     }
 }
 
-static void dump_buffer (FILE *file, int thread_index, uint64_t offset) {
-    lwt_buffer_t *tb = TraceBuffer[thread_index]; 
+static void dump_buffer (FILE *file, int thread_id, uint64_t offset)
+{
+    lwt_buffer_t *tb = lwt_buf_[thread_id]; 
     assert(tb);
     if (tb->head > LWT_BUFFER_SIZE) {
         for (int i = tb->head & LWT_BUFFER_MASK; i < LWT_BUFFER_SIZE; ++i) {
-            dump_record(file, thread_index + 1, tb->x + i, offset);
+            dump_record(file, thread_id, tb->x + i, offset);
         }
     }
 
     for (int i = 0; i < (tb->head & LWT_BUFFER_MASK); ++i) {
-        dump_record(file, thread_index + 1, tb->x + i, offset);
+        dump_record(file, thread_id, tb->x + i, offset);
     }
 }
 
@@ -82,19 +84,20 @@ void lwt_halt (void) {
     halt_ = 1;
 }
 
-void lwt_dump (const char *file_name) {
+void lwt_dump (const char *file_name)
+{
     halt_ = 1;
     uint64_t offset = (uint64_t)-1;
 
     for (int i = 0; i < MAX_NUM_THREADS; ++i) {
-        if (TraceBuffer[i] != NULL && TraceBuffer[i]->head != 0) {
-            uint64_t x = TraceBuffer[i]->x[0].timestamp;
+        if (lwt_buf_[i] != NULL && lwt_buf_[i]->head != 0) {
+            uint64_t x = lwt_buf_[i]->x[0].timestamp;
             if (x < offset) {
                 offset = x;
             }
-            if (TraceBuffer[i]->head > LWT_BUFFER_SIZE)
+            if (lwt_buf_[i]->head > LWT_BUFFER_SIZE)
             {
-                x = TraceBuffer[i]->x[TraceBuffer[i]->head & LWT_BUFFER_MASK].timestamp;
+                x = lwt_buf_[i]->x[lwt_buf_[i]->head & LWT_BUFFER_MASK].timestamp;
                 if (x < offset) {
                     offset = x;
                 }
@@ -106,7 +109,7 @@ void lwt_dump (const char *file_name) {
         FILE *file = fopen(file_name, "w");
         assert(file);
         for (int i = 0; i < MAX_NUM_THREADS; ++i) {
-            if (TraceBuffer[i] != NULL) {
+            if (lwt_buf_[i] != NULL) {
                 dump_buffer(file, i, offset);
             }
         }
@@ -117,7 +120,8 @@ void lwt_dump (const char *file_name) {
 
 void lwt_trace_i (uint64_t format, size_t value1, size_t value2) {
     while (halt_) {}
-    lwt_buffer_t *tb = TraceBuffer[GET_THREAD_INDEX()];
+    LOCALIZE_THREAD_LOCAL(tid_, int);
+    lwt_buffer_t *tb = lwt_buf_[tid_];
     if (tb != NULL) {
         unsigned int u, l;
         __asm__ __volatile__("rdtsc" : "=a" (l), "=d" (u)); 

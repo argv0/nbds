@@ -132,8 +132,6 @@ void basic_test (CuTest* tc) {
 }
 
 void *add_remove_worker (void *arg) {
-    nbd_thread_init();
-
     worker_data_t *wd = (worker_data_t *)arg;
     map_t *map = wd->map;
     CuTest* tc = wd->tc;
@@ -199,7 +197,7 @@ void concurrent_add_remove_test (CuTest* tc) {
         wd[i].tc = tc;
         wd[i].map = map;
         wd[i].wait = &wait;
-        int rc = pthread_create(thread + i, NULL, add_remove_worker, wd + i);
+        int rc = nbd_thread_create(thread + i, i, add_remove_worker, wd + i);
         if (rc != 0) { perror("nbd_thread_create"); return; }
     }
 
@@ -209,7 +207,7 @@ void concurrent_add_remove_test (CuTest* tc) {
 
     gettimeofday(&tv2, NULL);
     int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
-    map_print(map, FALSE);
+    map_print(map);
     printf("Time:%dms\n", ms);
     fflush(stdout);
 
@@ -317,7 +315,6 @@ void big_iteration_test (CuTest* tc) {
 }
 
 int main (void) {
-    nbd_thread_init();
     lwt_set_trace_level("r0m3l2t0");
 
     static const map_impl_t *map_types[] = { &MAP_IMPL_LL, &MAP_IMPL_SL, &MAP_IMPL_HT };

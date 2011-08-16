@@ -1,7 +1,7 @@
+#define _POSIX_C_SOURCE 1 // for rand_r
 #include <stdio.h>
 #include <errno.h>
 #include <pthread.h>
-#include <unistd.h>
 #include <sys/time.h>
 #include "common.h"
 #include "runtime.h"
@@ -53,7 +53,8 @@ node_t *node_alloc (void) {
 }
 
 void *worker (void *arg) {
-    nbd_thread_init();
+    int id = (int)(size_t)arg;
+    unsigned int rand_seed = (unsigned int)id + 1;
 
     // Wait for all the worker threads to be ready.
     (void)__sync_fetch_and_add(&wait_, -1);
@@ -61,7 +62,7 @@ void *worker (void *arg) {
 
     int i;
     for (i = 0; i < NUM_ITERATIONS; ++ i) {
-        int n = nbd_rand();
+        int n = rand_r(&rand_seed);
         if (n & 0x1) {
             lifo_aba_push(stk_, node_alloc());
         } else {
@@ -77,10 +78,9 @@ void *worker (void *arg) {
 }
 
 int main (int argc, char **argv) {
-    nbd_thread_init();
     lwt_set_trace_level("m3r3");
 
-    int num_threads = sysconf(_SC_NPROCESSORS_CONF);
+    int num_threads = MAX_NUM_THREADS;
     if (argc == 2)
     {
         errno = 0;
@@ -104,7 +104,7 @@ int main (int argc, char **argv) {
 
     pthread_t thread[num_threads];
     for (int i = 0; i < num_threads; ++i) {
-        int rc = pthread_create(thread + i, NULL, worker, (void *)(size_t)i);
+        int rc = nbd_thread_create(thread + i, i, worker, (void *)(size_t)i);
         if (rc != 0) { perror("pthread_create"); return rc; }
     }
     for (int i = 0; i < num_threads; ++i) {

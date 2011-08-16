@@ -27,7 +27,7 @@ static int duration_;
 #define OP_SELECT_RANGE (1ULL << 20)
 
 void *worker (void *arg) {
-    nbd_thread_init();
+    volatile uint64_t ops = 0;
 
     // Wait for all the worker threads to be ready.
     (void)SYNC_ADD(&load_, -1);
@@ -44,7 +44,6 @@ void *worker (void *arg) {
     (void)SYNC_ADD(&start_, -1);
     do {} while (start_);
 
-    uint64_t ops = 0;
     while (!stop_) {
         ++ops;
         map_key_t key = (nbd_rand() & (num_keys_ - 1)) + 1;
@@ -78,7 +77,7 @@ uint64_t run_test (void) {
 
     pthread_t thread[MAX_NUM_THREADS];
     for (int i = 0; i < num_threads_; ++i) {
-        int rc = pthread_create(thread + i, NULL, worker, (void*)(size_t)i);
+        int rc = nbd_thread_create(thread + i, i, worker, (void*)(size_t)i);
         if (rc != 0) { perror("pthread_create"); exit(rc); }
     }
 
@@ -153,7 +152,6 @@ int main (int argc, char **argv) {
     get_range_ = (int)((double)OP_SELECT_RANGE / 100 * read_ratio);
     put_range_ = get_range_ + (int)(((double)OP_SELECT_RANGE - get_range_) / 100 * put_ratio);
 
-    nbd_thread_init();
     static const map_impl_t *map_types[] = { &MAP_IMPL_HT };
     for (int i = 0; i < sizeof(map_types)/sizeof(*map_types); ++i) {
 #ifdef TEST_STRING_KEYS

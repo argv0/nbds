@@ -21,7 +21,6 @@ static long num_threads_;
 static map_t *map_;
 
 void *worker (void *arg) {
-    nbd_thread_init();
 
     // Wait for all the worker threads to be ready.
     (void)SYNC_ADD(&wait_, -1);
@@ -57,7 +56,6 @@ void *worker (void *arg) {
 }
 
 int main (int argc, char **argv) {
-    nbd_thread_init();
     lwt_set_trace_level("r0m3s3");
 
     char* program_name = argv[0];
@@ -101,7 +99,7 @@ int main (int argc, char **argv) {
         wait_ = num_threads_;
 
         for (int i = 0; i < num_threads_; ++i) {
-            int rc = pthread_create(thread + i, NULL, worker, (void*)(size_t)i);
+            int rc = nbd_thread_create(thread + i, i, worker, (void*)(size_t)i);
             if (rc != 0) { perror("pthread_create"); return rc; }
         }
 
@@ -111,7 +109,7 @@ int main (int argc, char **argv) {
 
         gettimeofday(&tv2, NULL);
         int ms = (int)(1000000*(tv2.tv_sec - tv1.tv_sec) + tv2.tv_usec - tv1.tv_usec) / 1000;
-        map_print(map_, FALSE);
+        map_print(map_);
         printf("Th:%ld Time:%dms\n\n", num_threads_, ms);
         fflush(stdout);
     }

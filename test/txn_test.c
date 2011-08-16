@@ -25,7 +25,7 @@ void test1 (CuTest* tc) {
 }
 
 int main (void) {
-    nbd_thread_init();
+
     lwt_set_trace_level("x3h3");
 
     CuString *output = CuStringNew();
